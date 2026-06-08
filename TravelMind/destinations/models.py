@@ -35,6 +35,7 @@ class Destination(models.Model):
     ]
 
     name = models.CharField(max_length=200)
+    name_mk = models.CharField(max_length=200, blank=True, default='')
     city = models.CharField(max_length=150, blank=True)
     country = models.CharField(max_length=100)
     description = models.TextField()

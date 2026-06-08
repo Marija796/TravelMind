@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import type { FilterParams, TravelType, Season, DifficultyLevel, Region } from '@/types/destination'
-import { REGION_LABELS } from '@/types/destination'
+import type { FilterParams, TravelType, Season, DifficultyLevel } from '@/types/destination'
 import Button from '@/components/ui/Button'
 
 interface Props {
@@ -12,7 +11,7 @@ interface Props {
 const TravelTypes: TravelType[] = ['beach', 'mountain', 'city', 'adventure', 'cultural', 'luxury', 'relaxation']
 const Seasons: Season[] = ['spring', 'summer', 'autumn', 'winter']
 const Difficulties: DifficultyLevel[] = ['easy', 'moderate', 'challenging']
-const Regions: Region[] = ['europe', 'asia', 'north_america', 'south_america', 'africa', 'oceania']
+const Regions = ['europe', 'asia', 'north_america', 'south_america', 'africa', 'oceania'] as const
 
 export default function FilterPanel({ filters, onChange, onClear }: Props) {
   const { t } = useTranslation()
@@ -42,7 +41,7 @@ export default function FilterPanel({ filters, onChange, onClear }: Props) {
                   : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
             >
-              {REGION_LABELS[r]}
+              {t(`region.${r}`)}
             </button>
           ))}
         </div>

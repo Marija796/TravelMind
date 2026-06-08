@@ -15,6 +15,7 @@ class DestinationSerializer(serializers.ModelSerializer):
             'id',
             'slug',
             'name',
+            'name_mk',
             'city',
             'country',
             'region',

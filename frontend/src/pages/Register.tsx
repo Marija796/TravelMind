@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useNavigate } from 'react-router-dom'
 import { UserPlus, Mail, Lock, User, Compass } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { register as registerUser } from '@/services/users'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/ui/Button'
@@ -23,6 +24,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function Register() {
+  const { t } = useTranslation()
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -56,13 +58,15 @@ export default function Register() {
             <span className="text-2xl font-bold">TravelMind</span>
           </div>
           <h2 className="text-4xl font-bold leading-tight mb-4">
-            Join thousands of<br />smart travellers
+            {t('auth.registerHeroTitle').split('\n').map((line, i) => (
+              <span key={i}>{line}{i === 0 && <br />}</span>
+            ))}
           </h2>
           <p className="text-white/70 text-lg max-w-sm">
-            Get personalized recommendations, save your favorite destinations, and plan your perfect trip.
+            {t('auth.registerHeroCopy')}
           </p>
           <div className="mt-10 space-y-3">
-            {['AI-powered destination matching', 'Save & organize favorites', 'Read & write travel reviews'].map((f) => (
+            {[t('auth.featureAI'), t('auth.featureSave'), t('auth.featureReviews')].map((f) => (
               <div key={f} className="flex items-center gap-2 text-white/80">
                 <div className="w-1.5 h-1.5 bg-white rounded-full" />
                 <span>{f}</span>
@@ -76,20 +80,20 @@ export default function Register() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create account</h1>
-            <p className="text-slate-500 dark:text-slate-400">Start your travel journey today</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{t('auth.registerTitle')}</h1>
+            <p className="text-slate-500 dark:text-slate-400">{t('auth.startJourney')}</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input
-              label="Username"
-              placeholder="traveller_jane"
+              label={t('auth.username')}
+              placeholder={t('auth.usernamePlaceholder')}
               leftIcon={<User className="w-4 h-4" />}
               error={errors.username?.message}
               {...register('username')}
             />
             <Input
-              label="Email"
+              label={t('auth.email')}
               type="email"
               placeholder="you@example.com"
               leftIcon={<Mail className="w-4 h-4" />}
@@ -97,16 +101,16 @@ export default function Register() {
               {...register('email')}
             />
             <Input
-              label="Password"
+              label={t('auth.password')}
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock className="w-4 h-4" />}
               error={errors.password?.message}
-              helperText="Minimum 8 characters"
+              helperText={t('auth.minPasswordChars')}
               {...register('password')}
             />
             <Input
-              label="Confirm Password"
+              label={t('auth.confirmPassword')}
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock className="w-4 h-4" />}
@@ -115,7 +119,7 @@ export default function Register() {
             />
 
             <Button type="submit" fullWidth isLoading={isSubmitting} leftIcon={<UserPlus className="w-4 h-4" />} size="lg" className="mt-2">
-              Create account
+              {t('auth.registerButton')}
             </Button>
           </form>
 
@@ -126,7 +130,7 @@ export default function Register() {
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-slate-50 dark:bg-slate-950 px-3 text-slate-400 font-medium tracking-wide">
-                Or sign up with
+                {t('auth.orContinueWith')}
               </span>
             </div>
           </div>
@@ -136,9 +140,9 @@ export default function Register() {
           </div>
 
           <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Already have an account?{' '}
+            {t('auth.alreadyHaveAccount')}{' '}
             <Link to="/login" className="text-primary-600 font-medium hover:underline">
-              Sign in
+              {t('auth.signIn')}
             </Link>
           </p>
         </div>

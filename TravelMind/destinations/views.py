@@ -12,7 +12,7 @@ class DestinationListView(generics.ListAPIView):
     permission_classes = [AllowAny]
     authentication_classes = [SilentJWTAuthentication]
     filterset_class = DestinationFilter
-    search_fields = ['name', 'country', 'description']
+    search_fields = ['name', 'name_mk', 'city', 'country', 'description', 'description_mk']
     ordering_fields = ['popularity_score', 'estimated_cost', 'name', 'created_at']
     ordering = ['-popularity_score']
 
