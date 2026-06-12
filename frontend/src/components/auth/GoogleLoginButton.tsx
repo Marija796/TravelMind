@@ -15,12 +15,12 @@ export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
   const [isLoading, setIsLoading] = useState(false)
 
   const login = useGoogleLogin({
-    flow: 'auth-code',
+    flow: 'implicit',
     scope: 'openid email profile',
-    onSuccess: async (codeResponse) => {
+    onSuccess: async (tokenResponse) => {
       setIsLoading(true)
       try {
-        const data = await googleAuth({ code: codeResponse.code })
+        const data = await googleAuth({ credential: tokenResponse.access_token })
         await loginWithTokens(data.access, data.refresh)
         toast.success('Signed in with Google!')
         navigate(redirectTo, { replace: true })
@@ -40,8 +40,6 @@ export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
         toast.error('Popup blocked — please allow popups for this site.')
       } else if (code === 'access_denied') {
         toast.error('Access denied. Please allow the required permissions.')
-      } else if (code === 'redirect_uri_mismatch' || code === 'invalid_client') {
-        toast.error('Google sign-in is misconfigured. Add http://localhost:5173 to Authorized JavaScript Origins in Google Cloud Console.')
       } else {
         toast.error(`Google sign-in failed${code ? ` (${code})` : ''}. Please try again.`)
       }

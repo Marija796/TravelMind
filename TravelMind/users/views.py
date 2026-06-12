@@ -171,6 +171,7 @@ class GoogleAuthView(APIView):
 
         credential = serializer.validated_data.get('credential')
         if not email and credential:
+            # First try: verify as a JWT ID token (returned by credential/One-Tap flow)
             try:
                 id_info = id_token.verify_oauth2_token(
                     credential,
@@ -183,6 +184,8 @@ class GoogleAuthView(APIView):
             except Exception:
                 pass
 
+            # Second try: treat credential as an access token and call userinfo endpoint
+            # (used by the implicit flow which returns access_token instead of id_token)
             if not email:
                 try:
                     req = urllib.request.Request(
