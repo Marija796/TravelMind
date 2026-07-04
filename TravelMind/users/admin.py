@@ -10,7 +10,8 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ['username', 'email']
     fieldsets = UserAdmin.fieldsets + (
         ('Travel Preferences', {
-            'fields': ('bio', 'preferred_travel_type', 'preferred_season', 'preferred_activities',
-                       'trip_duration_preference', 'budget', 'avatar_url', 'favorite_destinations'),
+            'fields': ('short_summary', 'gender', 'preferred_travel_type', 'preferred_season',
+                       'preferred_activities', 'trip_duration_preference', 'budget',
+                       'profile_image', 'favorite_destinations'),
         }),
     )

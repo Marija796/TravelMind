@@ -22,6 +22,8 @@ const Login = lazy(() => import('@/pages/Login'))
 const Register = lazy(() => import('@/pages/Register'))
 const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'))
+const AppReviews = lazy(() => import('@/pages/AppReviews'))
+const SimilarUsers = lazy(() => import('@/pages/SimilarUsers'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function PageFallback() {
@@ -68,6 +70,15 @@ function AnimatedRoutes() {
           <Route path="/forgot-password" element={<PageWrapper><ForgotPassword /></PageWrapper>} />
           <Route path="/reset-password" element={<PageWrapper><ResetPassword /></PageWrapper>} />
           <Route path="/recommendations" element={<PageWrapper><Recommendations /></PageWrapper>} />
+          <Route path="/app-reviews" element={<PageWrapper><AppReviews /></PageWrapper>} />
+          <Route
+            path="/similar-users"
+            element={
+              <ProtectedRoute>
+                <PageWrapper><SimilarUsers /></PageWrapper>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/profile"
             element={

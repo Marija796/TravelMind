@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Save, Trash2, User } from 'lucide-react'
+import { Save, Trash2, User, Camera } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Destination, TravelType, Season } from '@/types/destination'
-import { updateProfile } from '@/services/users'
+import type { Gender } from '@/types/user'
+import { updateProfile, updateProfileImage } from '@/services/users'
 import { getFavorites, removeFavorite } from '@/services/favorites'
 import { getWishlist, removeFromWishlist } from '@/services/wishlist'
 import { getVisited, removeFromVisited } from '@/services/visited'
@@ -33,11 +34,25 @@ const SeasonOptions: Array<{ value: Season; label: string }> = [
   { value: 'winter', label: 'Winter' },
 ]
 
+const GenderOptions: Array<{ value: Gender; label: string }> = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'other', label: 'Other' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+]
+
+const extractErrorMessage = (err: unknown, fallback: string) => {
+  const axiosErr = err as { response?: { data?: Record<string, string[] | string> } }
+  const data = axiosErr?.response?.data
+  if (!data) return fallback
+  return Object.values(data).flat().join(' ') || fallback
+}
+
 type TabKey = 'saved' | 'wishlist' | 'visited'
 
 export default function Profile() {
   const { t } = useTranslation()
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const [activeTab, setActiveTab] = useState<TabKey>('saved')
   const [favorites, setFavorites] = useState<Destination[]>([])
   const [wishlist, setWishlist] = useState<Destination[]>([])
@@ -50,13 +65,16 @@ export default function Profile() {
   const [travelType, setTravelType] = useState<TravelType | ''>(user?.preferred_travel_type || '')
   const [season, setSeason] = useState<Season | ''>(user?.preferred_season || '')
   const [activities, setActivities] = useState<string[]>(user?.preferred_activities || [])
+  const [gender, setGender] = useState<Gender | ''>(user?.gender || '')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(user?.profile_image || null)
 
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
-      bio: user?.bio || '',
+      username: user?.username || '',
+      short_summary: user?.short_summary || '',
       budget: user?.budget || '',
       trip_duration_preference: user?.trip_duration_preference || '',
-      avatar_url: user?.avatar_url || '',
     },
   })
 
@@ -66,24 +84,49 @@ export default function Profile() {
     getVisited().then(setVisited).catch(() => {}).finally(() => setLoadingVisited(false))
   }, [])
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
   const onSubmit = async (data: Record<string, unknown>) => {
     setSaving(true)
+    let imageFailed = false
+    let fieldsFailed = false
+
+    if (imageFile) {
+      try {
+        await updateProfileImage(imageFile)
+      } catch (err) {
+        imageFailed = true
+        toast.error(extractErrorMessage(err, 'Failed to upload profile picture'))
+      }
+    }
+
     try {
       await updateProfile({
-        bio: data.bio as string,
+        username: data.username as string,
+        short_summary: data.short_summary as string,
+        gender,
         budget: data.budget ? String(data.budget) : null,
         trip_duration_preference: data.trip_duration_preference ? Number(data.trip_duration_preference) : null,
-        avatar_url: data.avatar_url as string || null,
         preferred_travel_type: travelType,
         preferred_season: season,
         preferred_activities: activities,
       })
-      toast.success(t('profile.saveChanges') + ' ✓')
-    } catch {
-      toast.error('Failed to save changes')
-    } finally {
-      setSaving(false)
+    } catch (err) {
+      fieldsFailed = true
+      toast.error(extractErrorMessage(err, 'Failed to save changes'))
     }
+
+    await refreshUser()
+    setImageFile(null)
+    if (!imageFailed && !fieldsFailed) {
+      toast.success(t('profile.saveChanges') + ' ✓')
+    }
+    setSaving(false)
   }
 
   const removeFav = async (id: number) => {
@@ -133,8 +176,8 @@ export default function Profile() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Profile header */}
         <div className="flex items-center gap-5 mb-10">
-          {user?.avatar_url ? (
-            <img src={user.avatar_url} alt={user.username} className="w-20 h-20 rounded-2xl object-cover" />
+          {imagePreview ? (
+            <img src={imagePreview} alt={user?.username} className="w-20 h-20 rounded-2xl object-cover" />
           ) : (
             <div className="w-20 h-20 bg-gradient-to-br from-primary-400 to-accent-400 rounded-2xl flex items-center justify-center text-white text-2xl font-bold">
               {initials}
@@ -159,13 +202,30 @@ export default function Profile() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('profile.bio')}</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('profile.profileImage')}</label>
+            <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-primary-600 hover:text-primary-700">
+              <Camera className="w-4 h-4" />
+              {t('profile.changePhoto')}
+              <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+            </label>
+          </div>
+
+          <Input
+            label={t('profile.username')}
+            {...register('username', { required: true })}
+            error={errors.username ? 'Username is required' : undefined}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t('profile.shortSummary')}</label>
             <textarea
-              {...register('bio')}
+              {...register('short_summary', { maxLength: 280 })}
               rows={3}
-              placeholder={t('profile.bioPlaceholder')}
+              maxLength={280}
+              placeholder={t('profile.shortSummaryPlaceholder')}
               className="input-base resize-none"
             />
+            <p className="mt-1 text-xs text-slate-400 text-right">{(watch('short_summary') || '').length}/280</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -173,7 +233,13 @@ export default function Profile() {
             <Input label={t('profile.tripDuration')} type="number" placeholder="e.g. 14" {...register('trip_duration_preference')} />
           </div>
 
-          <Input label={t('profile.avatarUrl')} placeholder="https://..." {...register('avatar_url')} />
+          <PreferenceSelector
+            label={t('profile.gender')}
+            options={GenderOptions}
+            selected={gender ? [gender] : []}
+            onChange={(v) => setGender((v[0] as Gender) || '')}
+            singleSelect
+          />
 
           <PreferenceSelector
             label={t('profile.preferredTravelType')}

@@ -20,7 +20,16 @@ class CustomUser(AbstractUser):
         ('winter', 'Winter'),
     ]
 
-    bio = models.TextField(blank=True)
+    GENDER_CHOICES = [
+        ('male', 'Male'),
+        ('female', 'Female'),
+        ('other', 'Other'),
+        ('prefer_not_to_say', 'Prefer not to say'),
+    ]
+
+    short_summary = models.CharField(max_length=280, blank=True)
+    gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
     preferred_travel_type = models.CharField(
         max_length=20, choices=TRAVEL_TYPES, blank=True
     )
@@ -32,7 +41,6 @@ class CustomUser(AbstractUser):
     budget = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True
     )
-    avatar_url = models.URLField(blank=True, null=True)
     favorite_destinations = models.ManyToManyField(
         'destinations.Destination',
         blank=True,

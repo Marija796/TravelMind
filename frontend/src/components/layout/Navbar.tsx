@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Compass, Menu, X, User, LogOut, Sparkles, Map, Bookmark, CheckSquare } from 'lucide-react'
+import { Compass, Menu, X, User, LogOut, Sparkles, Map, Bookmark, CheckSquare, MessageSquare, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import ThemeToggle from '@/components/common/ThemeToggle'
@@ -32,8 +32,10 @@ export default function Navbar() {
   const navLinks = [
     { to: '/explore', label: t('nav.explore'), icon: <Map className="w-4 h-4" /> },
     { to: '/recommendations', label: t('nav.forYou'), icon: <Sparkles className="w-4 h-4" /> },
+    { to: '/app-reviews', label: t('nav.appReviews'), icon: <MessageSquare className="w-4 h-4" /> },
     ...(isAuthenticated
       ? [
+          { to: '/similar-users', label: t('nav.similarUsers'), icon: <Users className="w-4 h-4" /> },
           { to: '/wishlist', label: t('nav.wishlist'), icon: <Bookmark className="w-4 h-4" /> },
           { to: '/visited', label: t('nav.visited'), icon: <CheckSquare className="w-4 h-4" /> },
           { to: '/profile', label: user?.username || t('nav.profile'), icon: <User className="w-4 h-4" /> },

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://127.0.0.1:8000/api/reviews/app/)",
+      "Bash(./venv/Scripts/python.exe manage.py shell -c ' *)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/users/login/ -H \"Content-Type: application/json\" -d '{\"username\":\"testuser\",\"password\":\"testpass123\"}')",
+      "Bash(curl -s http://127.0.0.1:8000/api/users/profile/ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTc3OTk1LCJpYXQiOjE3ODMxNzQzOTUsImp0aSI6IjJjYzkxNzZmYzI1NzQ2ZGI5MmI4ODQ0ZmUyMWRlMmZhIiwidXNlcl9pZCI6IjIifQ.uztVTm_lZdaJ2SgyeMpqFtUGIWysa8JC25_XhgYjmyY')",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/reviews/app/me/ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTc3OTk1LCJpYXQiOjE3ODMxNzQzOTUsImp0aSI6IjJjYzkxNzZmYzI1NzQ2ZGI5MmI4ODQ0ZmUyMWRlMmZhIiwidXNlcl9pZCI6IjIifQ.uztVTm_lZdaJ2SgyeMpqFtUGIWysa8JC25_XhgYjmyY' -H 'Content-Type: application/json' -d '{\"rating\":5,\"comment\":\"Great app!\"}')",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X POST http://127.0.0.1:8000/api/reviews/app/me/ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTc3OTk1LCJpYXQiOjE3ODMxNzQzOTUsImp0aSI6IjJjYzkxNzZmYzI1NzQ2ZGI5MmI4ODQ0ZmUyMWRlMmZhIiwidXNlcl9pZCI6IjIifQ.uztVTm_lZdaJ2SgyeMpqFtUGIWysa8JC25_XhgYjmyY' -H 'Content-Type: application/json' -d '{\"rating\":4,\"comment\":\"again\"}')",
+      "Bash(curl -s http://127.0.0.1:8000/api/reviews/app/me/ -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTc3OTk1LCJpYXQiOjE3ODMxNzQzOTUsImp0aSI6IjJjYzkxNzZmYzI1NzQ2ZGI5MmI4ODQ0ZmUyMWRlMmZhIiwidXNlcl9pZCI6IjIifQ.uztVTm_lZdaJ2SgyeMpqFtUGIWysa8JC25_XhgYjmyY')",
+      "Bash(curl -s http://127.0.0.1:8000/api/recommendations/ -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTc3OTk1LCJpYXQiOjE3ODMxNzQzOTUsImp0aSI6IjJjYzkxNzZmYzI1NzQ2ZGI5MmI4ODQ0ZmUyMWRlMmZhIiwidXNlcl9pZCI6IjIifQ.uztVTm_lZdaJ2SgyeMpqFtUGIWysa8JC25_XhgYjmyY\")",
+      "Bash(python -m json.tool)",
+      "Bash(DEBUG=True ./venv/Scripts/python.exe manage.py shell -c ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://127.0.0.1:8000/admin/login/)"
+    ]
+  }
+}

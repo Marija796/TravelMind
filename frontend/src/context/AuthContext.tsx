@@ -9,6 +9,7 @@ interface AuthContextValue {
   login: (payload: LoginPayload) => Promise<void>
   loginWithTokens: (access: string, refresh: string) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -18,6 +19,7 @@ export const AuthContext = createContext<AuthContextValue>({
   login: async () => {},
   loginWithTokens: async () => {},
   logout: () => {},
+  refreshUser: async () => {},
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -63,9 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(profile)
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const profile = await getProfile()
+    setUser(profile)
+  }, [])
+
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated: !!user, isLoading, login, loginWithTokens, logout }}
+      value={{ user, isAuthenticated: !!user, isLoading, login, loginWithTokens, logout, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

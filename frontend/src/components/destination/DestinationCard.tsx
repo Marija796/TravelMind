@@ -85,11 +85,11 @@ export default function DestinationCard({
 
         {showScore && score !== undefined && (
           <div className="absolute top-3 left-3 bg-primary-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow z-10">
-            {score} pts
+            {Math.round(score * 100)}% match
           </div>
         )}
 
-        <div className={`absolute top-3 ${showScore && score !== undefined ? 'left-20' : 'left-3'} text-xs font-medium px-2.5 py-1 rounded-full z-10 ${TRAVEL_TYPE_COLORS[destination.travel_type]}`}>
+        <div className={`absolute top-3 ${showScore && score !== undefined ? 'left-28' : 'left-3'} text-xs font-medium px-2.5 py-1 rounded-full z-10 ${TRAVEL_TYPE_COLORS[destination.travel_type]}`}>
           {t(`travelType.${destination.travel_type}`)}
         </div>
 

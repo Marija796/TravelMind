@@ -1,7 +1,9 @@
 from rest_framework import generics, permissions, status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.files.base import ContentFile
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode
@@ -16,12 +18,14 @@ import os
 
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 
+from core.similarity import cosine_similarity
 from .models import CustomUser
 from .serializers import (
     RegisterSerializer, UserSerializer,
     GoogleAuthSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
 )
 from .utils import send_password_reset_email
+from .vectors import build_user_vector
 from destinations.models import Destination
 from destinations.serializers import DestinationSerializer
 
@@ -34,13 +38,16 @@ class RegisterView(generics.CreateAPIView):
 
 class ProfileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
 
     def put(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer = UserSerializer(
+            request.user, data=request.data, partial=True, context={'request': request}
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -48,6 +55,40 @@ class ProfileView(APIView):
 
     def patch(self, request):
         return self.put(request)
+
+
+class SimilarUsersView(APIView):
+    """
+    Ranks every other user by cosine similarity of their travel preference
+    vector against the logged-in user's, so users can discover like-minded
+    travellers. Unlike the destination recommendations endpoint, no minimum
+    similarity threshold is applied here - all other users are returned,
+    ordered descending, so the frontend can page/scroll through them.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        my_vector = build_user_vector(request.user)
+        others = CustomUser.objects.exclude(pk=request.user.pk)
+
+        scored = []
+        for other in others:
+            similarity = cosine_similarity(my_vector, build_user_vector(other))
+            scored.append((similarity, other))
+        scored.sort(key=lambda item: item[0], reverse=True)
+
+        results = [{
+            'id': other.id,
+            'username': other.username,
+            'gender': other.gender,
+            'short_summary': other.short_summary,
+            'profile_image': (
+                request.build_absolute_uri(other.profile_image.url) if other.profile_image else None
+            ),
+            'similarity': round(similarity * 100, 1),
+        } for similarity, other in scored]
+
+        return Response({'count': len(results), 'results': results})
 
 
 class FavoriteListView(APIView):
@@ -231,14 +272,25 @@ class GoogleAuthView(APIView):
                 user.set_unusable_password()
                 user.save()
                 if picture:
-                    user.avatar_url = picture
-                    user.save(update_fields=['avatar_url'])
+                    # Best-effort: a slow/broken Google CDN URL must never
+                    # block or fail the OAuth login itself.
+                    try:
+                        req = urllib.request.Request(
+                            picture, headers={'User-Agent': 'Mozilla/5.0'}
+                        )
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            content = resp.read()
+                        user.profile_image.save(
+                            f'google_{user.pk}.jpg', ContentFile(content), save=True
+                        )
+                    except Exception:
+                        pass
 
             refresh = RefreshToken.for_user(user)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user': UserSerializer(user).data,
+                'user': UserSerializer(user, context={'request': request}).data,
             }, status=status.HTTP_200_OK)
 
         except Exception as e:

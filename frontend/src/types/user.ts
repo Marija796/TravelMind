@@ -1,19 +1,36 @@
 import type { TravelType, Season } from './destination'
 
+export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say'
+
 export interface User {
   id: number
   username: string
   email: string
-  bio: string
+  short_summary: string
+  gender: Gender | ''
   preferred_travel_type: TravelType | ''
   preferred_season: Season | ''
   preferred_activities: string[]
   trip_duration_preference: number | null
   budget: string | null
-  avatar_url: string | null
+  profile_image: string | null
   favorite_destination_ids: number[]
   wishlist_destination_ids: number[]
   visited_destination_ids: number[]
+}
+
+export interface SimilarUser {
+  id: number
+  username: string
+  gender: Gender | ''
+  short_summary: string
+  profile_image: string | null
+  similarity: number
+}
+
+export interface SimilarUsersResponse {
+  count: number
+  results: SimilarUser[]
 }
 
 export interface LoginPayload {
@@ -34,13 +51,14 @@ export interface LoginResponse {
 }
 
 export interface UpdateProfilePayload {
-  bio?: string
+  username?: string
+  short_summary?: string
+  gender?: Gender | ''
   preferred_travel_type?: TravelType | ''
   preferred_season?: Season | ''
   preferred_activities?: string[]
   trip_duration_preference?: number | null
   budget?: string | null
-  avatar_url?: string | null
 }
 
 export interface GoogleAuthPayload { code?: string; credential?: string }

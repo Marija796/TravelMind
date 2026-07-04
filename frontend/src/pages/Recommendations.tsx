@@ -42,6 +42,7 @@ export default function Recommendations() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPrefs, setShowPrefs] = useState(false)
   const [hasFetched, setHasFetched] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   const [travelType, setTravelType] = useState<TravelType | ''>(user?.preferred_travel_type || '')
   const [season, setSeason] = useState<Season | ''>(user?.preferred_season || '')
@@ -54,6 +55,7 @@ export default function Recommendations() {
   const fetchRecs = async () => {
     setIsLoading(true)
     setHasFetched(true)
+    setShowAll(false)
     try {
       const data = await getRecommendations()
       setResults(data.results)
@@ -67,6 +69,7 @@ export default function Recommendations() {
   const fetchAnonymousRecs = async () => {
     setIsLoading(true)
     setHasFetched(true)
+    setShowAll(false)
     try {
       const params: Record<string, string> = {}
       if (travelType) params.travel_type = travelType
@@ -156,17 +159,29 @@ export default function Recommendations() {
             <>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{t(results.length === 1 ? 'recommendations.matchedCount' : 'recommendations.matchedCountPlural', { count: results.length })}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {results.map((dest, i) => (
+                {(showAll ? results : results.slice(0, 3)).map((dest, i) => (
                   <motion.div key={dest.id} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
                     <DestinationCard destination={dest} showScore score={dest.score} />
-                    {dest.match_explanation && (
-                      <div className="mt-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 px-3 py-2.5">
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{dest.match_explanation}</p>
+                    {(dest.match_quality || dest.match_explanation) && (
+                      <div className="mt-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 px-3 py-2.5 space-y-1">
+                        {dest.match_quality && (
+                          <p className="text-xs font-semibold text-primary-600 dark:text-primary-400">{dest.match_quality}</p>
+                        )}
+                        {dest.match_explanation && (
+                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{dest.match_explanation}</p>
+                        )}
                       </div>
                     )}
                   </motion.div>
                 ))}
               </div>
+              {results.length > 3 && (
+                <div className="mt-6 text-center">
+                  <Button variant="secondary" size="sm" onClick={() => setShowAll((v) => !v)}>
+                    {showAll ? t('recommendations.showLess') : t('recommendations.showMore', { count: results.length - 3 })}
+                  </Button>
+                </div>
+              )}
               <div className="mt-8 text-center">
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">{t('recommendations.signInForPersonalized')}</p>
                 <Link to="/register">
@@ -283,7 +298,7 @@ export default function Recommendations() {
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{t(results.length === 1 ? 'recommendations.matchedCount' : 'recommendations.matchedCountPlural', { count: results.length })}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {results.map((dest, i) => (
+              {(showAll ? results : results.slice(0, 3)).map((dest, i) => (
                 <motion.div
                   key={dest.id}
                   initial={{ opacity: 0, y: 24 }}
@@ -299,9 +314,14 @@ export default function Recommendations() {
                       score={dest.score}
                     />
                     <div className="mt-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
-                      {dest.match_explanation && (
-                        <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-700">
-                          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{dest.match_explanation}</p>
+                      {(dest.match_quality || dest.match_explanation) && (
+                        <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-700 space-y-1">
+                          {dest.match_quality && (
+                            <p className="text-xs font-semibold text-primary-600 dark:text-primary-400">{dest.match_quality}</p>
+                          )}
+                          {dest.match_explanation && (
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{dest.match_explanation}</p>
+                          )}
                         </div>
                       )}
                       <div className="px-3 py-2 grid grid-cols-2 gap-x-4 gap-y-1">
@@ -317,6 +337,13 @@ export default function Recommendations() {
                 </motion.div>
               ))}
             </div>
+            {results.length > 3 && (
+              <div className="mt-8 text-center">
+                <Button variant="secondary" onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? t('recommendations.showLess') : t('recommendations.showMore', { count: results.length - 3 })}
+                </Button>
+              </div>
+            )}
           </>
         ) : !showPrefs ? (
           <div className="text-center py-20">

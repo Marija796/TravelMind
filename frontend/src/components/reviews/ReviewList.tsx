@@ -1,14 +1,15 @@
 import { useTranslation } from 'react-i18next'
-import type { Review } from '@/types/review'
-import ReviewCard from './ReviewCard'
+import ReviewCard, { type ReviewLike } from './ReviewCard'
 import Skeleton from '@/components/ui/Skeleton'
 
 interface Props {
-  reviews: Review[]
+  reviews: (ReviewLike & { id: number })[]
   isLoading?: boolean
+  emptyMessage?: string
+  highlightUsername?: string
 }
 
-export default function ReviewList({ reviews, isLoading }: Props) {
+export default function ReviewList({ reviews, isLoading, emptyMessage, highlightUsername }: Props) {
   const { t } = useTranslation()
 
   if (isLoading) {
@@ -31,14 +32,16 @@ export default function ReviewList({ reviews, isLoading }: Props) {
   if (reviews.length === 0) {
     return (
       <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">
-        {t('review.noReviews')}
+        {emptyMessage || t('review.noReviews')}
       </p>
     )
   }
 
   return (
     <div>
-      {reviews.map((r) => <ReviewCard key={r.id} review={r} />)}
+      {reviews.map((r) => (
+        <ReviewCard key={r.id} review={r} highlight={!!highlightUsername && r.username === highlightUsername} />
+      ))}
     </div>
   )
 }

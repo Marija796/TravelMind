@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
-    RegisterView, ProfileView,
+    RegisterView, ProfileView, SimilarUsersView,
     FavoriteListView, FavoriteToggleView,
     WishlistListView, WishlistToggleView,
     VisitedListView, VisitedToggleView,
@@ -14,6 +14,7 @@ urlpatterns = [
     path('login/', TokenObtainPairView.as_view(), name='login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
     path('profile/', ProfileView.as_view(), name='profile'),
+    path('similar/', SimilarUsersView.as_view(), name='similar-users'),
     path('favorites/', FavoriteListView.as_view(), name='favorites-list'),
     path('favorites/<int:pk>/', FavoriteToggleView.as_view(), name='favorites-toggle'),
     path('wishlist/', WishlistListView.as_view(), name='wishlist-list'),
