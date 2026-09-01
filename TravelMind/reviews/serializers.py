@@ -29,6 +29,22 @@ class ReviewSerializer(serializers.ModelSerializer):
     def get_profile_image(self, obj):
         return _build_profile_image_url(obj.user, self.context)
 
+    def validate(self, attrs):
+        # Defense in depth alongside the model's unique_together('user',
+        # 'destination') - without this, a second review for the same
+        # destination surfaces as an opaque IntegrityError/500 instead of a
+        # clean 400 with a helpful message (same pattern as
+        # AppReviewSerializer below).
+        request = self.context.get('request')
+        destination_id = self.context.get('destination_id')
+        if request and destination_id and Review.objects.filter(
+            user=request.user, destination_id=destination_id
+        ).exists():
+            raise serializers.ValidationError(
+                'You have already reviewed this destination.'
+            )
+        return attrs
+
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)

@@ -1,11 +1,13 @@
 import type { TravelType, Season } from './destination'
 
 export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say'
+export type Role = 'user' | 'admin'
 
 export interface User {
   id: number
   username: string
   email: string
+  role: Role
   short_summary: string
   gender: Gender | ''
   preferred_travel_type: TravelType | ''
@@ -31,6 +33,21 @@ export interface SimilarUser {
 export interface SimilarUsersResponse {
   count: number
   results: SimilarUser[]
+  reason: 'no_preferences_set' | null
+}
+
+// Returned by /users/destinations/<id>/interested/ - a SimilarUser plus why
+// they showed up for this specific destination: 'direct' (they favorited/
+// wishlisted it themselves) or 'similar_destination' (they favorited/
+// wishlisted a destination with the same travel type or country, only used
+// to backfill when the direct pool is thin).
+export interface DestinationInterestedUser extends SimilarUser {
+  interest: 'direct' | 'similar_destination'
+}
+
+export interface DestinationInterestedUsersResponse {
+  count: number
+  results: DestinationInterestedUser[]
 }
 
 export interface LoginPayload {

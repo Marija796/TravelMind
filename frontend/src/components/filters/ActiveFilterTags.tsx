@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { FilterParams } from '@/types/destination'
+import { useTravelCategories, useSeasons } from '@/hooks/useTaxonomy'
+import { translateOrFallback } from '@/utils/translateOrFallback'
 import Badge from '@/components/ui/Badge'
 
 interface Props {
@@ -8,13 +10,27 @@ interface Props {
 }
 
 export default function ActiveFilterTags({ filters, onChange }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { categories } = useTravelCategories()
+  const { seasons } = useSeasons()
   const remove = (key: keyof FilterParams) => onChange({ ...filters, [key]: '', page: 1 })
   const tags: { key: keyof FilterParams; label: string }[] = []
 
   if (filters.region)           tags.push({ key: 'region',           label: t(`region.${filters.region}`) })
-  if (filters.travel_type)      tags.push({ key: 'travel_type',      label: t(`travelType.${filters.travel_type}`) })
-  if (filters.season)           tags.push({ key: 'season',           label: t(`season.${filters.season}`) })
+  if (filters.travel_type) {
+    const category = categories.find((c) => c.slug === filters.travel_type)
+    tags.push({
+      key: 'travel_type',
+      label: translateOrFallback(t, `travelType.${filters.travel_type}`, i18n.language === 'mk' && category?.name_mk ? category.name_mk : category?.name || filters.travel_type),
+    })
+  }
+  if (filters.season) {
+    const seasonRow = seasons.find((s) => s.slug === filters.season)
+    tags.push({
+      key: 'season',
+      label: translateOrFallback(t, `season.${filters.season}`, i18n.language === 'mk' && seasonRow?.name_mk ? seasonRow.name_mk : seasonRow?.name || filters.season),
+    })
+  }
   if (filters.difficulty_level) tags.push({ key: 'difficulty_level', label: t(`filter.${filters.difficulty_level}`) })
   if (filters.country)          tags.push({ key: 'country',          label: `${t('filter.country')}: ${filters.country}` })
   if (filters.budget_max)       tags.push({ key: 'budget_max',       label: t('filter.activeBudget', { value: filters.budget_max }) })

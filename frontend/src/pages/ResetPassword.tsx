@@ -1,29 +1,31 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Lock, CheckCircle, AlertTriangle, Compass } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { confirmPasswordReset } from '@/services/users'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import toast from 'react-hot-toast'
 
-const schema = z.object({
-  new_password: z.string().min(8, 'Password must be at least 8 characters'),
-  new_password2: z.string().min(1, 'Please confirm your password'),
-}).refine((d) => d.new_password === d.new_password2, {
-  message: 'Passwords do not match',
-  path: ['new_password2'],
-})
-
-type FormData = z.infer<typeof schema>
-
 export default function ResetPassword() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const uid = searchParams.get('uid') || ''
   const token = searchParams.get('token') || ''
   const [success, setSuccess] = useState(false)
+
+  const schema = useMemo(() => z.object({
+    new_password: z.string().min(8, t('auth.newPasswordMinChars')),
+    new_password2: z.string().min(1, t('auth.confirmPasswordRequired')),
+  }).refine((d) => d.new_password === d.new_password2, {
+    message: t('auth.passwordsDontMatch'),
+    path: ['new_password2'],
+  }), [t])
+
+  type FormData = z.infer<typeof schema>
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -36,12 +38,12 @@ export default function ResetPassword() {
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Invalid Reset Link</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{t('auth.invalidResetLinkTitle')}</h1>
           <p className="text-slate-500 dark:text-slate-400 mb-8">
-            This password reset link is missing required information. Please request a new one.
+            {t('auth.invalidResetLinkBody')}
           </p>
           <Link to="/forgot-password">
-            <Button fullWidth>Request new link</Button>
+            <Button fullWidth>{t('auth.requestNewLink')}</Button>
           </Link>
         </div>
       </div>
@@ -55,12 +57,12 @@ export default function ResetPassword() {
           <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Password reset!</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{t('auth.passwordResetSuccessTitle')}</h1>
           <p className="text-slate-500 dark:text-slate-400 mb-8">
-            Your password has been successfully updated. You can now sign in with your new password.
+            {t('auth.passwordResetSuccessBody')}
           </p>
           <Link to="/login">
-            <Button fullWidth>Sign in now</Button>
+            <Button fullWidth>{t('auth.signInNow')}</Button>
           </Link>
         </div>
       </div>
@@ -73,7 +75,7 @@ export default function ResetPassword() {
       setSuccess(true)
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: Record<string, string> } }
-      const msg = axiosErr?.response?.data?.error || 'Reset link is invalid or has expired.'
+      const msg = axiosErr?.response?.data?.error || t('auth.invalidToken')
       toast.error(msg)
     }
   }
@@ -91,10 +93,12 @@ export default function ResetPassword() {
             <span className="text-2xl font-bold">TravelMind</span>
           </div>
           <h2 className="text-4xl font-bold leading-tight mb-4">
-            Almost there —<br />set your new password
+            {t('auth.resetHeroTitle').split('\n').map((line, i) => (
+              <span key={i}>{line}{i === 0 && <br />}</span>
+            ))}
           </h2>
           <p className="text-white/70 text-lg max-w-sm">
-            Choose a strong password to keep your travel plans and saved destinations secure.
+            {t('auth.resetHeroCopy')}
           </p>
         </div>
       </div>
@@ -103,24 +107,24 @@ export default function ResetPassword() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Set new password</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{t('auth.resetPasswordTitle')}</h1>
             <p className="text-slate-500 dark:text-slate-400">
-              Choose a strong password of at least 8 characters.
+              {t('auth.resetPasswordSubtitle')}
             </p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <Input
-              label="New password"
+              label={t('auth.newPassword')}
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock className="w-4 h-4" />}
               error={errors.new_password?.message}
-              helperText="Minimum 8 characters"
+              helperText={t('auth.minPasswordChars')}
               {...register('new_password')}
             />
             <Input
-              label="Confirm new password"
+              label={t('auth.confirmNewPassword')}
               type="password"
               placeholder="••••••••"
               leftIcon={<Lock className="w-4 h-4" />}
@@ -128,14 +132,14 @@ export default function ResetPassword() {
               {...register('new_password2')}
             />
             <Button type="submit" fullWidth isLoading={isSubmitting} size="lg">
-              Reset password
+              {t('auth.resetPassword')}
             </Button>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-            Remembered it?{' '}
+            {t('auth.rememberedIt')}{' '}
             <Link to="/login" className="text-primary-600 font-medium hover:underline">
-              Sign in
+              {t('auth.signIn')}
             </Link>
           </p>
         </div>

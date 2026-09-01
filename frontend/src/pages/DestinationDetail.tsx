@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, MapPin, DollarSign, Compass, Sun, Clock, BarChart2, Heart, Bookmark, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, MapPin, DollarSign, Compass, Sun, Clock, BarChart2, Heart, Bookmark, CheckCircle2, Building2, Plane } from 'lucide-react'
 import type { Destination } from '@/types/destination'
 import type { Review } from '@/types/review'
 import { getDestinationBySlug } from '@/services/destinations'
@@ -10,11 +10,15 @@ import { addFavorite, removeFavorite } from '@/services/favorites'
 import { addToWishlist, removeFromWishlist } from '@/services/wishlist'
 import { markVisited, removeFromVisited } from '@/services/visited'
 import { useAuth } from '@/hooks/useAuth'
-import { TRAVEL_TYPE_COLORS } from '@/types/destination'
+import { useTravelCategories, useSeasons } from '@/hooks/useTaxonomy'
+import { translateOrFallback } from '@/utils/translateOrFallback'
+import { localizedName, localizedDescription, localizedCountry } from '@/utils/localizedDestination'
+import { TRAVEL_TYPE_COLORS, DEFAULT_TRAVEL_TYPE_COLOR } from '@/types/destination'
 import ActivityChip from '@/components/destination/ActivityChip'
 import RelatedDestinations from '@/components/destination/RelatedDestinations'
 import ReviewList from '@/components/reviews/ReviewList'
 import ReviewForm from '@/components/reviews/ReviewForm'
+import InterestedUsers from '@/components/destination/InterestedUsers'
 import StarRating from '@/components/common/StarRating'
 import Skeleton from '@/components/ui/Skeleton'
 import Button from '@/components/ui/Button'
@@ -26,6 +30,8 @@ export default function DestinationDetail() {
   const { t, i18n } = useTranslation()
   const { slug } = useParams<{ slug: string }>()
   const { isAuthenticated, user } = useAuth()
+  const { categories } = useTravelCategories()
+  const { seasons } = useSeasons()
   const [destination, setDestination] = useState<Destination | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
   const [loadingDest, setLoadingDest] = useState(true)
@@ -39,6 +45,12 @@ export default function DestinationDetail() {
   const [isVisited, setIsVisited] = useState(false)
   const [visitedLoading, setVisitedLoading] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
+  // Review.username (not id) is what the API returns per review, but
+  // usernames are unique so this is an accurate "do I already have a
+  // review here" check - lets the form be replaced with a friendly message
+  // before the user ever hits the backend's one-review-per-destination
+  // constraint.
+  const hasOwnReview = !!user && reviews.some((r) => r.username === user.username)
 
   useEffect(() => {
     if (!slug) return
@@ -65,11 +77,11 @@ export default function DestinationDetail() {
         if (cancelled) return
         const status = err?.response?.status
         if (status === 404) {
-          setErrorMsg('This destination does not exist.')
+          setErrorMsg(t('destination.errorNotExist'))
         } else if (!status) {
-          setErrorMsg('Cannot connect to the server. Make sure Django is running on port 8000.')
+          setErrorMsg(t('destination.errorNoConnection'))
         } else {
-          setErrorMsg(`Server error (${status}). Please try again.`)
+          setErrorMsg(t('destination.errorServer', { status }))
         }
         setLoadError(true)
       })
@@ -78,38 +90,38 @@ export default function DestinationDetail() {
   }, [slug, user])
 
   const toggleFav = async () => {
-    if (!isAuthenticated) { toast.error('Please log in to save favorites'); return }
+    if (!isAuthenticated) { toast.error(t('destination.loginToFavorite')); return }
     if (!destination) return
     setFavLoading(true)
     try {
-      if (isFav) { await removeFavorite(destination.id); toast.success('Removed from favorites') }
-      else { await addFavorite(destination.id); toast.success('Saved to favorites') }
+      if (isFav) { await removeFavorite(destination.id); toast.success(t('destination.removedFromFavoritesToast')) }
+      else { await addFavorite(destination.id); toast.success(t('destination.savedToFavoritesToast')) }
       setIsFav(!isFav)
-    } catch { toast.error('Failed to update') }
+    } catch { toast.error(t('destination.updateFailed')) }
     finally { setFavLoading(false) }
   }
 
   const toggleWishlist = async () => {
-    if (!isAuthenticated) { toast.error('Please log in to use wishlist'); return }
+    if (!isAuthenticated) { toast.error(t('destination.loginToWishlist')); return }
     if (!destination) return
     setWishlistLoading(true)
     try {
-      if (isWishlisted) { await removeFromWishlist(destination.id); toast.success('Removed from wishlist') }
-      else { await addToWishlist(destination.id); toast.success('Added to wishlist') }
+      if (isWishlisted) { await removeFromWishlist(destination.id); toast.success(t('destination.removedFromWishlistToast')) }
+      else { await addToWishlist(destination.id); toast.success(t('destination.addedToWishlistToast')) }
       setIsWishlisted(!isWishlisted)
-    } catch { toast.error('Failed to update wishlist') }
+    } catch { toast.error(t('destination.wishlistUpdateFailed')) }
     finally { setWishlistLoading(false) }
   }
 
   const toggleVisited = async () => {
-    if (!isAuthenticated) { toast.error('Please log in to mark visited'); return }
+    if (!isAuthenticated) { toast.error(t('destination.loginToMarkVisited')); return }
     if (!destination) return
     setVisitedLoading(true)
     try {
-      if (isVisited) { await removeFromVisited(destination.id); toast.success('Removed from visited') }
-      else { await markVisited(destination.id); toast.success('Marked as visited!') }
+      if (isVisited) { await removeFromVisited(destination.id); toast.success(t('destination.removedFromVisitedToast')) }
+      else { await markVisited(destination.id); toast.success(t('destination.markedVisitedToast')) }
       setIsVisited(!isVisited)
-    } catch { toast.error('Failed to update') }
+    } catch { toast.error(t('destination.updateFailed')) }
     finally { setVisitedLoading(false) }
   }
 
@@ -157,12 +169,13 @@ export default function DestinationDetail() {
   }
 
   const heroImage = images[activeImage] || FALLBACK_IMAGE
+  const displayName = localizedName(destination, i18n.language)
 
   return (
     <div className="min-h-screen">
       {/* Hero */}
       <div className="relative h-[55vh] min-h-[380px] overflow-hidden">
-        <img src={heroImage} alt={destination.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE }} />
+        <img src={heroImage} alt={displayName} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE }} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
         {/* Back button */}
@@ -190,12 +203,19 @@ export default function DestinationDetail() {
         {/* Title overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10">
           <div className="max-w-5xl mx-auto">
-            <div className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full mb-3 ${TRAVEL_TYPE_COLORS[destination.travel_type]}`}>
-              {t(`travelType.${destination.travel_type}`)}
+            <div className={`inline-flex text-xs font-medium px-2.5 py-1 rounded-full mb-3 ${TRAVEL_TYPE_COLORS[destination.travel_type as keyof typeof TRAVEL_TYPE_COLORS] || DEFAULT_TRAVEL_TYPE_COLOR}`}>
+              {translateOrFallback(
+                t,
+                `travelType.${destination.travel_type}`,
+                (() => {
+                  const c = categories.find((cat) => cat.slug === destination.travel_type)
+                  return (i18n.language === 'mk' && c?.name_mk ? c.name_mk : c?.name) || destination.travel_type
+                })(),
+              )}
             </div>
-            <h1 className="text-3xl sm:text-5xl font-bold text-white mb-1">{destination.name}</h1>
+            <h1 className="text-3xl sm:text-5xl font-bold text-white mb-1">{displayName}</h1>
             <p className="flex items-center gap-1.5 text-white/80 text-lg">
-              <MapPin className="w-4 h-4" /> {destination.country}
+              <MapPin className="w-4 h-4" /> {localizedCountry(destination, i18n.language)}
             </p>
           </div>
         </div>
@@ -207,7 +227,7 @@ export default function DestinationDetail() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
             { icon: <DollarSign className="w-5 h-5 text-emerald-500" />, label: t('destination.estimatedCost'), value: `€${Number(destination.estimated_cost).toLocaleString()}` },
-            { icon: <Sun className="w-5 h-5 text-amber-500" />, label: t('destination.bestSeason'), value: destination.best_season ? t(`season.${destination.best_season}`) : '—' },
+            { icon: <Sun className="w-5 h-5 text-amber-500" />, label: t('destination.bestSeason'), value: destination.best_season ? translateOrFallback(t, `season.${destination.best_season}`, (() => { const s = seasons.find((season) => season.slug === destination.best_season); return (i18n.language === 'mk' && s?.name_mk ? s.name_mk : s?.name) || destination.best_season })()) : '—' },
             { icon: <Clock className="w-5 h-5 text-blue-500" />, label: t('destination.duration'), value: `${destination.trip_duration_min}–${destination.trip_duration_max} ${t('destination.days')}` },
             { icon: <BarChart2 className="w-5 h-5 text-purple-500" />, label: t('destination.difficulty'), value: t(`filter.${destination.difficulty_level}`) },
           ].map((item) => (
@@ -254,7 +274,7 @@ export default function DestinationDetail() {
           <div className="flex items-center gap-3">
             <StarRating value={destination.average_rating || 0} size="lg" showLabel />
             <span className="text-sm text-slate-500 dark:text-slate-400">
-              {destination.review_count} review{destination.review_count !== 1 ? 's' : ''}
+              {t('destination.reviewsCount', { count: destination.review_count })}
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -289,8 +309,44 @@ export default function DestinationDetail() {
         <div className="mb-8">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">{t('destination.about')}</h2>
           <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base">
-            {i18n.language === 'mk' && destination.description_mk ? destination.description_mk : destination.description}
+            {localizedDescription(destination, i18n.language)}
           </p>
+        </div>
+
+        {/* Accommodation & Flights */}
+        <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <a
+            href={destination.booking_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-4 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all group"
+          >
+            <div className="w-11 h-11 shrink-0 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                {t('destination.findAccommodation')}
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('destination.findAccommodationHint')}</p>
+            </div>
+          </a>
+          <a
+            href={destination.flight_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-4 p-5 rounded-2xl border border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all group"
+          >
+            <div className="w-11 h-11 shrink-0 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Plane className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                {t('destination.findFlights')}
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t('destination.findFlightsHint')}</p>
+            </div>
+          </a>
         </div>
 
         {/* Activities */}
@@ -329,7 +385,12 @@ export default function DestinationDetail() {
         <div id="reviews" className="mb-12">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">{t('destination.reviews')}</h2>
           <ReviewList reviews={reviews} isLoading={loadingReviews} />
-          {isAuthenticated && (
+          {isAuthenticated && hasOwnReview && (
+            <p className="mt-6 text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+              {t('review.alreadyReviewed')}
+            </p>
+          )}
+          {isAuthenticated && !hasOwnReview && (
             <div className="mt-6">
               <ReviewForm
                 destinationId={destination.id}
@@ -343,6 +404,13 @@ export default function DestinationDetail() {
             </p>
           )}
         </div>
+
+        {/* People interested in this destination / similar interests -
+            contextual to this destination, not a standalone dashboard
+            feature (see InterestedUsers). */}
+        {isAuthenticated && (
+          <InterestedUsers destinationId={destination.id} destinationName={localizedName(destination, i18n.language)} />
+        )}
 
         {/* Related destinations */}
         <RelatedDestinations travelType={destination.travel_type} excludeId={destination.id} />

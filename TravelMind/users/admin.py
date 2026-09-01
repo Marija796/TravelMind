@@ -5,10 +5,13 @@ from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ['username', 'email', 'preferred_travel_type', 'preferred_season', 'budget']
-    list_filter = ['preferred_travel_type', 'preferred_season']
+    list_display = ['username', 'email', 'role', 'preferred_travel_type', 'preferred_season', 'budget']
+    list_filter = ['role', 'preferred_travel_type', 'preferred_season']
     search_fields = ['username', 'email']
     fieldsets = UserAdmin.fieldsets + (
+        ('Role', {
+            'fields': ('role',),
+        }),
         ('Travel Preferences', {
             'fields': ('short_summary', 'gender', 'preferred_travel_type', 'preferred_season',
                        'preferred_activities', 'trip_duration_preference', 'budget',

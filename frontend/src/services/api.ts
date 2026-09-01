@@ -1,4 +1,6 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
+import i18n from '@/i18n'
 
 const api = axios.create({
   baseURL: '/api',
@@ -25,6 +27,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+
+    if (error.response?.status === 403) {
+      // Distinct from 401 (expired/missing token, handled by the refresh
+      // flow below) - a 403 means the request was authenticated but the
+      // account lacks permission (e.g. a non-admin hitting an admin-only
+      // endpoint, or a race where a demoted admin's stale session is still
+      // in use). No retry logic applies here, just surface it.
+      toast.error(i18n.t('admin.accessDenied'))
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {

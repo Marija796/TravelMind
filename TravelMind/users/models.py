@@ -3,23 +3,6 @@ from django.contrib.auth.models import AbstractUser
 
 
 class CustomUser(AbstractUser):
-    TRAVEL_TYPES = [
-        ('beach', 'Beach'),
-        ('mountain', 'Mountain'),
-        ('city', 'City Tourism'),
-        ('adventure', 'Adventure'),
-        ('cultural', 'Cultural'),
-        ('luxury', 'Luxury'),
-        ('relaxation', 'Relaxation'),
-    ]
-
-    SEASON_CHOICES = [
-        ('spring', 'Spring'),
-        ('summer', 'Summer'),
-        ('autumn', 'Autumn'),
-        ('winter', 'Winter'),
-    ]
-
     GENDER_CHOICES = [
         ('male', 'Male'),
         ('female', 'Female'),
@@ -27,14 +10,22 @@ class CustomUser(AbstractUser):
         ('prefer_not_to_say', 'Prefer not to say'),
     ]
 
+    ROLE_CHOICES = [
+        ('user', 'User'),
+        ('admin', 'Administrator'),
+    ]
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')
     short_summary = models.CharField(max_length=280, blank=True)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
-    preferred_travel_type = models.CharField(
-        max_length=20, choices=TRAVEL_TYPES, blank=True
+    preferred_travel_type = models.ForeignKey(
+        'destinations.TravelCategory', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
     )
-    preferred_season = models.CharField(
-        max_length=20, choices=SEASON_CHOICES, blank=True
+    preferred_season = models.ForeignKey(
+        'destinations.Season', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
     )
     preferred_activities = models.JSONField(default=list, blank=True)
     trip_duration_preference = models.IntegerField(null=True, blank=True)

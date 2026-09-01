@@ -80,6 +80,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.CustomUser'
 
+# EmailOrUsernameBackend is a superset of ModelBackend (same username
+# lookup, plus email) - listing it alone covers both login-by-username and
+# login-by-email for every login path that goes through authenticate(),
+# including the JWT login endpoint and Django's own /admin/ site.
+AUTHENTICATION_BACKENDS = ['users.backends.EmailOrUsernameBackend']
+
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
     default='http://localhost:5173,http://127.0.0.1:5173',
@@ -123,3 +129,26 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='TravelMind <noreply@travelmind.app>')
+
+# Makes SQLite's LIKE (and therefore icontains/istartswith/etc.) case-fold
+# Unicode correctly - without this, Cyrillic search is case-sensitive while
+# Latin search isn't, since SQLite's built-in LIKE only case-folds ASCII.
+import core.sqlite_unicode  # noqa: E402,F401
+
+# Errors are logged server-side (e.g. logger.exception in views that catch
+# a broad Exception to keep internal detail out of the API response) rather
+# than printed or silently dropped. Deliberately just a console handler -
+# in production, the hosting platform (e.g. a PaaS or container runtime) is
+# expected to capture stdout/stderr, so shipping a log-file/rotation setup
+# here would be unused complexity this project doesn't need.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO' if DEBUG else 'WARNING',
+    },
+}

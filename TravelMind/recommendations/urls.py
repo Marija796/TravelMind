@@ -1,7 +1,7 @@
 from django.urls import path
-from .views import RecommendationView, AnonymousRecommendationView
+from .views import RecommendationView, RecommendationHistoryListView
 
 urlpatterns = [
     path('', RecommendationView.as_view(), name='recommendations'),
-    path('anonymous/', AnonymousRecommendationView.as_view(), name='recommendations-anonymous'),
+    path('history/', RecommendationHistoryListView.as_view(), name='recommendations-history'),
 ]

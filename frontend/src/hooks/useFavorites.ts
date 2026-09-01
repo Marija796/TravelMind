@@ -1,15 +1,17 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { addFavorite, removeFavorite } from '@/services/favorites'
 import { useAuth } from './useAuth'
 import toast from 'react-hot-toast'
 
 export function useFavorites(initialIds: number[] = []) {
+  const { t } = useTranslation()
   const { isAuthenticated } = useAuth()
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set(initialIds))
 
   const toggle = async (id: number) => {
     if (!isAuthenticated) {
-      toast.error('Please log in to save favorites')
+      toast.error(t('destination.loginToFavorite'))
       return
     }
     const isFav = favoriteIds.has(id)
@@ -21,10 +23,10 @@ export function useFavorites(initialIds: number[] = []) {
     try {
       if (isFav) {
         await removeFavorite(id)
-        toast.success('Removed from favorites')
+        toast.success(t('destination.removedFromFavoritesToast'))
       } else {
         await addFavorite(id)
-        toast.success('Saved to favorites')
+        toast.success(t('destination.savedToFavoritesToast'))
       }
     } catch {
       setFavoriteIds((prev) => {
@@ -32,7 +34,7 @@ export function useFavorites(initialIds: number[] = []) {
         isFav ? next.add(id) : next.delete(id)
         return next
       })
-      toast.error('Failed to update favorites')
+      toast.error(t('destination.favoritesUpdateFailed'))
     }
   }
 

@@ -1,23 +1,25 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link } from 'react-router-dom'
 import { Mail, ArrowLeft, CheckCircle, Compass } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { requestPasswordReset } from '@/services/users'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import toast from 'react-hot-toast'
 
-const schema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-})
-
-type FormData = z.infer<typeof schema>
-
 export default function ForgotPassword() {
+  const { t } = useTranslation()
   const [submitted, setSubmitted] = useState(false)
   const [submittedEmail, setSubmittedEmail] = useState('')
+
+  const schema = useMemo(() => z.object({
+    email: z.string().email(t('auth.pleaseEnterValidEmail')),
+  }), [t])
+
+  type FormData = z.infer<typeof schema>
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -30,7 +32,7 @@ export default function ForgotPassword() {
       setSubmitted(true)
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } }
-      const msg = axiosErr?.response?.data?.error || 'Something went wrong. Please try again.'
+      const msg = axiosErr?.response?.data?.error || t('auth.somethingWentWrong')
       toast.error(msg)
     }
   }
@@ -48,10 +50,12 @@ export default function ForgotPassword() {
             <span className="text-2xl font-bold">TravelMind</span>
           </div>
           <h2 className="text-4xl font-bold leading-tight mb-4">
-            Don't worry,<br />we've got you
+            {t('auth.forgotHeroTitle').split('\n').map((line, i) => (
+              <span key={i}>{line}{i === 0 && <br />}</span>
+            ))}
           </h2>
           <p className="text-white/70 text-lg max-w-sm">
-            Enter your email address and we'll send you a link to reset your password and get back on track.
+            {t('auth.forgotHeroCopy')}
           </p>
         </div>
       </div>
@@ -64,7 +68,7 @@ export default function ForgotPassword() {
             className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to login
+            {t('auth.backToLogin')}
           </Link>
 
           {submitted ? (
@@ -72,50 +76,49 @@ export default function ForgotPassword() {
               <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Check your inbox</h1>
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{t('auth.checkYourInbox')}</h1>
               <p className="text-slate-500 dark:text-slate-400 mb-2">
-                If <span className="font-medium text-slate-700 dark:text-slate-300">{submittedEmail}</span> is registered,
-                a password reset link is on its way.
+                {t('auth.checkInboxBody', { email: submittedEmail })}
               </p>
               <p className="text-sm text-slate-400 dark:text-slate-500 mb-8">
-                Didn't receive it? Check your spam folder or try again in a few minutes.
+                {t('auth.checkInboxHint')}
               </p>
               <div className="flex flex-col gap-3">
                 <Button onClick={() => setSubmitted(false)} variant="secondary" fullWidth>
-                  Try a different email
+                  {t('auth.tryDifferentEmail')}
                 </Button>
                 <Link to="/login">
-                  <Button fullWidth>Back to login</Button>
+                  <Button fullWidth>{t('auth.backToLogin')}</Button>
                 </Link>
               </div>
             </div>
           ) : (
             <>
               <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Forgot password?</h1>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{t('auth.forgotPasswordTitle')}</h1>
                 <p className="text-slate-500 dark:text-slate-400">
-                  Enter your email and we'll send you a reset link.
+                  {t('auth.forgotPasswordSubtitle')}
                 </p>
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <Input
-                  label="Email address"
+                  label={t('auth.email')}
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder={t('auth.emailPlaceholder')}
                   leftIcon={<Mail className="w-4 h-4" />}
                   error={errors.email?.message}
                   {...register('email')}
                 />
                 <Button type="submit" fullWidth isLoading={isSubmitting} leftIcon={<Mail className="w-4 h-4" />} size="lg">
-                  Send reset link
+                  {t('auth.sendResetLink')}
                 </Button>
               </form>
 
               <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-                Remembered it?{' '}
+                {t('auth.rememberedIt')}{' '}
                 <Link to="/login" className="text-primary-600 font-medium hover:underline">
-                  Sign in
+                  {t('auth.signIn')}
                 </Link>
               </p>
             </>

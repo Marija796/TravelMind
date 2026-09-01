@@ -3,16 +3,21 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from destinations.models import Destination
 from .models import Review, AppReview
 from .serializers import ReviewSerializer, AppReviewSerializer
 
 
 class ReviewListCreateView(generics.ListCreateAPIView):
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):
+        # 404s on a bad/deleted destination id instead of the create path's
+        # unique_together check ever colliding with a plain foreign-key
+        # constraint failure (opaque IntegrityError/500) on a nonexistent one.
+        get_object_or_404(Destination, pk=self.kwargs.get('destination_id'))
         destination_id = self.kwargs.get('destination_id')
         return (
             Review.objects.filter(destination_id=destination_id)
@@ -20,7 +25,13 @@ class ReviewListCreateView(generics.ListCreateAPIView):
             .order_by('-created_at')
         )
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['destination_id'] = self.kwargs.get('destination_id')
+        return context
+
     def perform_create(self, serializer):
+        get_object_or_404(Destination, pk=self.kwargs.get('destination_id'))
         serializer.save(
             user=self.request.user,
             destination_id=self.kwargs.get('destination_id')
@@ -29,7 +40,7 @@ class ReviewListCreateView(generics.ListCreateAPIView):
 
 class AppReviewListCreateView(generics.ListCreateAPIView):
     serializer_class = AppReviewSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
 
     def get_queryset(self):

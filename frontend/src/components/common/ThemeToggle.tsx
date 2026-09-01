@@ -1,14 +1,16 @@
 import { Moon, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useTheme } from '@/hooks/useTheme'
 import { motion } from 'framer-motion'
 
 export default function ThemeToggle() {
+  const { t } = useTranslation()
   const { theme, toggleTheme } = useTheme()
   return (
     <button
       onClick={toggleTheme}
       className="relative p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-      aria-label="Toggle theme"
+      aria-label={t('common.toggleTheme')}
     >
       <motion.div
         key={theme}

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Destination
+from .models import Destination, TravelCategory, Season
 
 
 class DestinationSerializer(serializers.ModelSerializer):
@@ -8,6 +8,15 @@ class DestinationSerializer(serializers.ModelSerializer):
     is_favorited = serializers.SerializerMethodField()
     is_wishlisted = serializers.SerializerMethodField()
     is_visited = serializers.SerializerMethodField()
+    # Explicit SlugRelatedField: travel_type/best_season are now FKs to the
+    # dynamic TravelCategory/Season tables, but every existing frontend
+    # consumer expects the JSON shape it always got ("travel_type": "beach").
+    # Without this, DRF's ModelSerializer would auto-generate a numeric
+    # PrimaryKeyRelatedField instead and silently break every consumer.
+    travel_type = serializers.SlugRelatedField(slug_field='slug', queryset=TravelCategory.objects.all())
+    best_season = serializers.SlugRelatedField(
+        slug_field='slug', queryset=Season.objects.all(), required=False, allow_null=True,
+    )
 
     class Meta:
         model = Destination
@@ -18,12 +27,15 @@ class DestinationSerializer(serializers.ModelSerializer):
             'name_mk',
             'city',
             'country',
+            'country_mk',
             'region',
             'description',
             'description_mk',
             'travel_type',
             'estimated_cost',
             'image_url',
+            'booking_url',
+            'flight_url',
             'images',
             'activities',
             'attractions',

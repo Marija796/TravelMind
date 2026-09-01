@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Compass, Menu, X, User, LogOut, Sparkles, Map, Bookmark, CheckSquare, MessageSquare, Users } from 'lucide-react'
+import { Compass, Menu, X, User, LogOut, Sparkles, Map, Bookmark, CheckSquare, MessageSquare, ShieldCheck, History } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import ThemeToggle from '@/components/common/ThemeToggle'
@@ -29,19 +29,24 @@ export default function Navbar() {
     navigate('/')
   }
 
-  const navLinks = [
-    { to: '/explore', label: t('nav.explore'), icon: <Map className="w-4 h-4" /> },
-    { to: '/recommendations', label: t('nav.forYou'), icon: <Sparkles className="w-4 h-4" /> },
-    { to: '/app-reviews', label: t('nav.appReviews'), icon: <MessageSquare className="w-4 h-4" /> },
-    ...(isAuthenticated
-      ? [
-          { to: '/similar-users', label: t('nav.similarUsers'), icon: <Users className="w-4 h-4" /> },
-          { to: '/wishlist', label: t('nav.wishlist'), icon: <Bookmark className="w-4 h-4" /> },
-          { to: '/visited', label: t('nav.visited'), icon: <CheckSquare className="w-4 h-4" /> },
-          { to: '/profile', label: user?.username || t('nav.profile'), icon: <User className="w-4 h-4" /> },
-        ]
-      : []),
-  ]
+  // Every one of these routes requires an account (there is no guest/
+  // anonymous access anywhere in the app), so none of them are shown until
+  // the user is logged in - clicking one pre-login would otherwise just
+  // dead-end at a login redirect.
+  const navLinks = isAuthenticated
+    ? [
+        { to: '/explore', label: t('nav.explore'), icon: <Map className="w-4 h-4" /> },
+        { to: '/recommendations', label: t('nav.forYou'), icon: <Sparkles className="w-4 h-4" /> },
+        { to: '/app-reviews', label: t('nav.appReviews'), icon: <MessageSquare className="w-4 h-4" /> },
+        ...(user?.role === 'admin'
+          ? [{ to: '/admin', label: t('nav.admin'), icon: <ShieldCheck className="w-4 h-4" /> }]
+          : []),
+        { to: '/wishlist', label: t('nav.wishlist'), icon: <Bookmark className="w-4 h-4" /> },
+        { to: '/visited', label: t('nav.visited'), icon: <CheckSquare className="w-4 h-4" /> },
+        { to: '/activity', label: t('nav.activity'), icon: <History className="w-4 h-4" /> },
+        { to: '/profile', label: user?.username || t('nav.profile'), icon: <User className="w-4 h-4" /> },
+      ]
+    : []
 
   return (
     <header

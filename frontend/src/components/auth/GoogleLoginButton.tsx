@@ -1,15 +1,20 @@
 import { useGoogleLogin } from '@react-oauth/google'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { googleAuth } from '@/services/users'
 import { useAuth } from '@/hooks/useAuth'
 import toast from 'react-hot-toast'
 import { useState } from 'react'
 
 interface Props {
+  // Left undefined when the caller has no specific deep-link target, so
+  // this can fall through to a role-based redirect (mirrors Login.tsx's
+  // `from` handling) instead of always landing on '/'.
   redirectTo?: string
 }
 
-export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
+export default function GoogleLoginButton({ redirectTo }: Props) {
+  const { t } = useTranslation()
   const { loginWithTokens } = useAuth()
   const navigate = useNavigate()
   const [isLoading, setIsLoading] = useState(false)
@@ -21,12 +26,12 @@ export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
       setIsLoading(true)
       try {
         const data = await googleAuth({ credential: tokenResponse.access_token })
-        await loginWithTokens(data.access, data.refresh)
-        toast.success('Signed in with Google!')
-        navigate(redirectTo, { replace: true })
+        const profile = await loginWithTokens(data.access, data.refresh)
+        toast.success(t('auth.googleSignInSuccess'))
+        navigate(redirectTo || (profile.role === 'admin' ? '/admin' : '/'), { replace: true })
       } catch (err: unknown) {
         const axiosErr = err as { response?: { data?: { error?: string } } }
-        const msg = axiosErr?.response?.data?.error || (err instanceof Error ? err.message : '') || 'Google sign-in failed. Please try again.'
+        const msg = axiosErr?.response?.data?.error || (err instanceof Error ? err.message : '') || t('auth.googleSignInFailed')
         console.error('Google sign-in error:', err)
         toast.error(msg)
       } finally {
@@ -37,11 +42,11 @@ export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
       console.error('Google OAuth error:', error)
       const code = error.error as string | undefined
       if (code === 'popup_blocked_by_browser') {
-        toast.error('Popup blocked — please allow popups for this site.')
+        toast.error(t('auth.googlePopupBlocked'))
       } else if (code === 'access_denied') {
-        toast.error('Access denied. Please allow the required permissions.')
+        toast.error(t('auth.googleAccessDenied'))
       } else {
-        toast.error(`Google sign-in failed${code ? ` (${code})` : ''}. Please try again.`)
+        toast.error(t('auth.googleSignInFailedWithCode', { code: code ? ` (${code})` : '' }))
       }
     },
   })
@@ -63,7 +68,7 @@ export default function GoogleLoginButton({ redirectTo = '/' }: Props) {
           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
         </svg>
       )}
-      {isLoading ? 'Signing in…' : 'Continue with Google'}
+      {isLoading ? t('auth.signingIn') : t('auth.continueWithGoogle')}
     </button>
   )
 }

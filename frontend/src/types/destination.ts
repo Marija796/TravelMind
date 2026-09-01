@@ -7,14 +7,18 @@ export interface Destination {
   id: number
   slug: string
   name: string
+  name_mk: string
   city: string
   country: string
+  country_mk: string
   region: string
   description: string
   description_mk: string
   travel_type: TravelType
   estimated_cost: string
   image_url: string | null
+  booking_url: string
+  flight_url: string
   images: string[]
   activities: string[]
   attractions: string
@@ -100,6 +104,11 @@ export const REGION_LABELS: Record<Region, string> = {
   africa: 'Africa',
   oceania: 'Australia & Oceania',
 }
+
+// Fallback for a travel_type slug with no entry below (an admin-added
+// category the static color map predates) - keeps the badge rendering a
+// neutral style instead of an undefined className.
+export const DEFAULT_TRAVEL_TYPE_COLOR = 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
 
 export const TRAVEL_TYPE_COLORS: Record<TravelType, string> = {
   beach: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',

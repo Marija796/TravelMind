@@ -26,9 +26,9 @@ export default function Wishlist() {
     try {
       await removeFromWishlist(id)
       setItems((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Removed from wishlist')
+      toast.success(t('destination.removedFromWishlistToast'))
     } catch {
-      toast.error('Failed to remove')
+      toast.error(t('profile.removeFailed'))
     }
   }
 
@@ -54,7 +54,7 @@ export default function Wishlist() {
         ) : (
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-              {items.length} destination{items.length !== 1 ? 's' : ''} on your wishlist
+              {t('wishlist.countOnWishlist', { count: items.length })}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {items.map((dest) => (
@@ -63,7 +63,7 @@ export default function Wishlist() {
                   <button
                     onClick={() => remove(dest.id)}
                     className="absolute top-3 left-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20"
-                    title="Remove from wishlist"
+                    title={t('destination.removeFromWishlist')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

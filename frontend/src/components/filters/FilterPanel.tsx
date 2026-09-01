@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import type { FilterParams, TravelType, Season, DifficultyLevel } from '@/types/destination'
+import type { FilterParams, DifficultyLevel } from '@/types/destination'
+import { useTravelCategories, useSeasons } from '@/hooks/useTaxonomy'
+import { translateOrFallback } from '@/utils/translateOrFallback'
 import Button from '@/components/ui/Button'
 
 interface Props {
@@ -8,13 +10,13 @@ interface Props {
   onClear: () => void
 }
 
-const TravelTypes: TravelType[] = ['beach', 'mountain', 'city', 'adventure', 'cultural', 'luxury', 'relaxation']
-const Seasons: Season[] = ['spring', 'summer', 'autumn', 'winter']
 const Difficulties: DifficultyLevel[] = ['easy', 'moderate', 'challenging']
 const Regions = ['europe', 'asia', 'north_america', 'south_america', 'africa', 'oceania'] as const
 
 export default function FilterPanel({ filters, onChange, onClear }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { categories } = useTravelCategories()
+  const { seasons } = useSeasons()
   const set = (key: keyof FilterParams, value: unknown) => onChange({ ...filters, [key]: value, page: 1 })
   const hasActive = Object.entries(filters).some(([k, v]) => k !== 'page' && k !== 'ordering' && v !== '' && v !== undefined)
 
@@ -51,17 +53,17 @@ export default function FilterPanel({ filters, onChange, onClear }: Props) {
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{t('filter.travelType')}</p>
         <div className="flex flex-wrap gap-1.5">
-          {TravelTypes.map((type) => (
+          {categories.map((category) => (
             <button
-              key={type}
-              onClick={() => set('travel_type', filters.travel_type === type ? '' : type)}
+              key={category.slug}
+              onClick={() => set('travel_type', filters.travel_type === category.slug ? '' : category.slug)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                filters.travel_type === type
+                filters.travel_type === category.slug
                   ? 'bg-primary-600 text-white'
                   : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
             >
-              {t(`travelType.${type}`)}
+              {translateOrFallback(t, `travelType.${category.slug}`, i18n.language === 'mk' && category.name_mk ? category.name_mk : category.name)}
             </button>
           ))}
         </div>
@@ -71,17 +73,17 @@ export default function FilterPanel({ filters, onChange, onClear }: Props) {
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{t('filter.season')}</p>
         <div className="flex flex-wrap gap-1.5">
-          {Seasons.map((s) => (
+          {seasons.map((season) => (
             <button
-              key={s}
-              onClick={() => set('season', filters.season === s ? '' : s)}
+              key={season.slug}
+              onClick={() => set('season', filters.season === season.slug ? '' : season.slug)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                filters.season === s
+                filters.season === season.slug
                   ? 'bg-accent-600 text-white'
                   : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
             >
-              {t(`season.${s}`)}
+              {translateOrFallback(t, `season.${season.slug}`, i18n.language === 'mk' && season.name_mk ? season.name_mk : season.name)}
             </button>
           ))}
         </div>

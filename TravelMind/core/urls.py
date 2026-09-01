@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from .admin_views import AdminStatsView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -9,6 +10,7 @@ urlpatterns = [
     path('api/destinations/', include('destinations.urls')),
     path('api/reviews/', include('reviews.urls')),
     path('api/recommendations/', include('recommendations.urls')),
+    path('api/admin/stats/', AdminStatsView.as_view(), name='admin-stats'),
 ]
 
 if settings.DEBUG:

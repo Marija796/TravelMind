@@ -1,9 +1,12 @@
+import logging
+
 from rest_framework import generics, permissions, status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.files.base import ContentFile
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode
@@ -18,16 +21,30 @@ import os
 
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 
-from core.similarity import cosine_similarity
+logger = logging.getLogger(__name__)
+
 from .models import CustomUser
 from .serializers import (
     RegisterSerializer, UserSerializer,
     GoogleAuthSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
 )
 from .utils import send_password_reset_email
-from .vectors import build_user_vector
+from .vectors import calculate_similarity
 from destinations.models import Destination
 from destinations.serializers import DestinationSerializer
+
+
+def _safe_profile_image_url(request, user):
+    # other.profile_image is truthy for any non-empty ImageFieldFile, but
+    # .url still raises if the field has no name (blank) or the underlying
+    # file record is orphaned - guard both cases rather than the bare
+    # `if other.profile_image` check this used to rely on.
+    if not user.profile_image or not user.profile_image.name:
+        return None
+    try:
+        return request.build_absolute_uri(user.profile_image.url)
+    except ValueError:
+        return None
 
 
 class RegisterView(generics.CreateAPIView):
@@ -45,8 +62,18 @@ class ProfileView(APIView):
         return Response(serializer.data)
 
     def put(self, request):
+        # SlugRelatedField (preferred_travel_type/preferred_season) doesn't
+        # accept '' as "no value" the way the old CharFields did - the
+        # frontend sends '' for "unset" (TravelType | ''), so normalize it
+        # to None here before it reaches the serializer.
+        data = request.data
+        if hasattr(data, 'copy'):
+            data = data.copy()
+            for field in ('preferred_travel_type', 'preferred_season'):
+                if field in data and data[field] == '':
+                    data[field] = None
         serializer = UserSerializer(
-            request.user, data=request.data, partial=True, context={'request': request}
+            request.user, data=data, partial=True, context={'request': request}
         )
         if serializer.is_valid():
             serializer.save()
@@ -57,35 +84,132 @@ class ProfileView(APIView):
         return self.put(request)
 
 
-class SimilarUsersView(APIView):
+SIMILAR_USERS_LIMIT = 8
+
+
+def _compute_similar_users(request, me):
     """
-    Ranks every other user by cosine similarity of their travel preference
-    vector against the logged-in user's, so users can discover like-minded
-    travellers. Unlike the destination recommendations endpoint, no minimum
-    similarity threshold is applied here - all other users are returned,
-    ordered descending, so the frontend can page/scroll through them.
+    Shared by SimilarUsersView (a user viewing their own matches) and
+    AdminSimilarUsersView (an admin inspecting/verifying any user's
+    matches) - same real, weighted, live calculation either way, so the
+    admin tool can't drift from what a normal user actually sees.
+    """
+    my_favorites = set(me.favorite_destinations.values_list('id', flat=True))
+    has_preferences = any([
+        me.preferred_travel_type_id, me.preferred_season_id,
+        me.preferred_activities, me.budget, me.trip_duration_preference,
+        my_favorites,
+    ])
+    if not has_preferences:
+        # Without this guard every criterion in calculate_similarity is
+        # incomparable (nothing set on "me") and it returns 0.0 for every
+        # comparison - a meaningless "everyone ties at 0%" list rather than
+        # a real empty state the frontend can render distinctly.
+        return {'count': 0, 'results': [], 'reason': 'no_preferences_set'}
+
+    # role='admin' is this app's actual admin designation (see
+    # core.permissions.IsAdminRole) - is_staff/is_superuser are Django's
+    # separate built-in flags for the /admin/ site and aren't necessarily
+    # set together with role, so both must be checked to keep every kind of
+    # admin account out of the candidate pool.
+    others = CustomUser.objects.exclude(pk=me.pk).exclude(role='admin').filter(
+        is_staff=False, is_superuser=False, is_active=True,
+    ).prefetch_related('favorite_destinations')
+
+    scored = []
+    for other in others:
+        # .values_list() always issues a fresh query and ignores the
+        # prefetch_related('favorite_destinations') cache above - only
+        # .all() (or iterating the manager directly, as here) reads from
+        # it. Using values_list() here would silently turn this back into
+        # one query per candidate user.
+        other_favorites = {d.id for d in other.favorite_destinations.all()}
+        similarity = calculate_similarity(me, other, favorites_a=my_favorites, favorites_b=other_favorites)
+        scored.append((similarity, other))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    scored = scored[:SIMILAR_USERS_LIMIT]
+
+    results = [{
+        'id': other.id,
+        'username': other.username,
+        'gender': other.gender,
+        'short_summary': other.short_summary,
+        'profile_image': _safe_profile_image_url(request, other),
+        'similarity': round(similarity * 100, 1),
+    } for similarity, other in scored]
+
+    return {'count': len(results), 'results': results, 'reason': None}
+
+
+DESTINATION_INTERESTED_USERS_LIMIT = 8
+
+
+class DestinationInterestedUsersView(APIView):
+    """
+    Similar Users, made contextual to one destination instead of a standalone
+    dashboard feature: for the destination being viewed, finds real users who
+    favorited/wishlisted it (direct interest), and - only when that pool is
+    thin - backfills with users who favorited/wishlisted a *similar*
+    destination (same travel type or same country). Every candidate is then
+    ranked by the same real, weighted calculate_similarity score used
+    elsewhere in the app (never random/hardcoded), highest first.
+
+    Query shape is deliberately fixed regardless of how many users match:
+    one query for the direct-interest set (+1 prefetch), at most one more
+    for the similar-destination id list and one more for the backfill set
+    (+1 prefetch) - never one query per candidate user.
     """
     permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        my_vector = build_user_vector(request.user)
-        others = CustomUser.objects.exclude(pk=request.user.pk)
+    def get(self, request, destination_id):
+        destination = get_object_or_404(Destination, pk=destination_id)
+        me = request.user
+        my_favorites = set(me.favorite_destinations.values_list('id', flat=True))
+
+        base_qs = CustomUser.objects.exclude(pk=me.pk).exclude(role='admin').filter(
+            is_active=True, is_staff=False, is_superuser=False,
+        )
+
+        direct_qs = base_qs.filter(
+            Q(favorite_destinations=destination) | Q(wishlist_destinations=destination)
+        ).distinct().prefetch_related('favorite_destinations')
+        candidates = list(direct_qs)
+        interest_kind = {u.id: 'direct' for u in candidates}
+
+        if len(candidates) < DESTINATION_INTERESTED_USERS_LIMIT:
+            similar_destination_ids = list(
+                Destination.objects.filter(
+                    Q(travel_type_id=destination.travel_type_id) | Q(country=destination.country)
+                ).exclude(pk=destination.pk).values_list('id', flat=True)
+            )
+            if similar_destination_ids:
+                extra_qs = base_qs.exclude(pk__in=interest_kind.keys()).filter(
+                    Q(favorite_destinations__id__in=similar_destination_ids)
+                    | Q(wishlist_destinations__id__in=similar_destination_ids)
+                ).distinct().prefetch_related('favorite_destinations')
+                for other in extra_qs:
+                    if other.id not in interest_kind:
+                        candidates.append(other)
+                        interest_kind[other.id] = 'similar_destination'
 
         scored = []
-        for other in others:
-            similarity = cosine_similarity(my_vector, build_user_vector(other))
+        for other in candidates:
+            # .all() (not .values_list()) so this reads the prefetch_related
+            # cache above instead of issuing a fresh query per candidate.
+            other_favorites = {d.id for d in other.favorite_destinations.all()}
+            similarity = calculate_similarity(me, other, favorites_a=my_favorites, favorites_b=other_favorites)
             scored.append((similarity, other))
         scored.sort(key=lambda item: item[0], reverse=True)
+        scored = scored[:DESTINATION_INTERESTED_USERS_LIMIT]
 
         results = [{
             'id': other.id,
             'username': other.username,
             'gender': other.gender,
             'short_summary': other.short_summary,
-            'profile_image': (
-                request.build_absolute_uri(other.profile_image.url) if other.profile_image else None
-            ),
+            'profile_image': _safe_profile_image_url(request, other),
             'similarity': round(similarity * 100, 1),
+            'interest': interest_kind[other.id],
         } for similarity, other in scored]
 
         return Response({'count': len(results), 'results': results})
@@ -204,9 +328,13 @@ class GoogleAuthView(APIView):
                 email = id_info.get('email')
                 name = id_info.get('name', '')
                 picture = id_info.get('picture', '')
-            except Exception as e:
+            except Exception:
+                # Logged for diagnosis, but the client only ever sees a
+                # generic message - the real exception can contain OAuth
+                # library/network internals that shouldn't reach the user.
+                logger.exception('Failed to exchange Google authorization code')
                 return Response(
-                    {'error': f'Failed to exchange Google code: {str(e)}'},
+                    {'error': 'Failed to sign in with Google. Please try again.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -238,9 +366,10 @@ class GoogleAuthView(APIView):
                         email = userinfo.get('email')
                         name = userinfo.get('name', '')
                         picture = userinfo.get('picture', '')
-                except Exception as e:
+                except Exception:
+                    logger.exception('Failed to verify Google credential')
                     return Response(
-                        {'error': f'Failed to verify Google credential: {str(e)}'},
+                        {'error': 'Invalid or expired Google credential. Please try again.'},
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
@@ -293,9 +422,10 @@ class GoogleAuthView(APIView):
                 'user': UserSerializer(user, context={'request': request}).data,
             }, status=status.HTTP_200_OK)
 
-        except Exception as e:
+        except Exception:
+            logger.exception('Google sign-in user lookup/creation failed')
             return Response(
-                {'error': f'User lookup/creation failed: {str(e)}'},
+                {'error': 'Something went wrong while signing you in. Please try again.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -315,11 +445,14 @@ class PasswordResetRequestView(APIView):
         if user:
             try:
                 send_password_reset_email(user)
-            except Exception as e:
-                return Response(
-                    {'error': f'Failed to send email: {str(e)}'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            except Exception:
+                # Deliberately still returns the same generic `message`
+                # below rather than an error - surfacing send failures
+                # (or their internal detail, e.g. SMTP config) here would
+                # both leak that this email is registered and expose
+                # infrastructure internals, undoing the enumeration
+                # protection the generic message exists for.
+                logger.exception('Failed to send password reset email to user id=%s', user.pk)
 
         return Response(message, status=status.HTTP_200_OK)
 

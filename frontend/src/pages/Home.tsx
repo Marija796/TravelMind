@@ -50,11 +50,16 @@ export default function Home() {
   const featuredInView = useInView(featuredRef, { once: true, margin: '-100px' })
 
   useEffect(() => {
+    // Destination browsing (like every other feature) requires an account
+    // now that guest access has been removed - an unauthenticated visitor
+    // would just get a 401 from this call, so skip it and let the section
+    // below stay hidden for them instead.
+    if (!isAuthenticated) { setLoading(false); return }
     getFeaturedDestinations()
       .then((d) => setFeatured(d.results.slice(0, 6)))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [isAuthenticated])
 
   useEffect(() => {
     if (!isAuthenticated || !user?.preferred_travel_type) return
@@ -189,33 +194,35 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Destinations */}
-      <section ref={featuredRef} className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={featuredInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.5 }}
-            className="flex items-end justify-between mb-10 flex-wrap gap-4"
-          >
-            <div>
-              <p className="text-sm font-medium text-primary-600 mb-1">{t('home.topPicks')}</p>
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white">{t('home.trendingTitle')}</h2>
-            </div>
-            <Button variant="secondary" rightIcon={<ArrowRight className="w-4 h-4" />} onClick={() => navigate('/explore')}>
-              {t('home.viewAll')}
-            </Button>
-          </motion.div>
+      {/* Featured Destinations - requires an account, like all browsing now does */}
+      {isAuthenticated && (
+        <section ref={featuredRef} className="py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={featuredInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.5 }}
+              className="flex items-end justify-between mb-10 flex-wrap gap-4"
+            >
+              <div>
+                <p className="text-sm font-medium text-primary-600 mb-1">{t('home.topPicks')}</p>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-white">{t('home.trendingTitle')}</h2>
+              </div>
+              <Button variant="secondary" rightIcon={<ArrowRight className="w-4 h-4" />} onClick={() => navigate('/explore')}>
+                {t('home.viewAll')}
+              </Button>
+            </motion.div>
 
-          <DestinationGrid
-            destinations={featured}
-            isLoading={loading}
-            skeletonCount={6}
-            favoriteIds={favoriteIds}
-            onFavoriteToggle={toggle}
-          />
-        </div>
-      </section>
+            <DestinationGrid
+              destinations={featured}
+              isLoading={loading}
+              skeletonCount={6}
+              favoriteIds={favoriteIds}
+              onFavoriteToggle={toggle}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Personalized Recommendations — only for authenticated users with preferences */}
       {isAuthenticated && (recommendations.length > 0 || recsLoading) && (

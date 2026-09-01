@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Pencil, Trash2 } from 'lucide-react'
 import { getAppReviews, getMyAppReview, deleteAppReview } from '@/services/appReviews'
@@ -13,7 +12,7 @@ import toast from 'react-hot-toast'
 
 export default function AppReviews() {
   const { t } = useTranslation()
-  const { isAuthenticated, user } = useAuth()
+  const { user } = useAuth()
 
   const [reviews, setReviews] = useState<AppReview[]>([])
   const [averageRating, setAverageRating] = useState<number | null>(null)
@@ -25,16 +24,13 @@ export default function AppReviews() {
   const load = async () => {
     setIsLoading(true)
     try {
-      const [list, mine] = await Promise.all([
-        getAppReviews(),
-        isAuthenticated ? getMyAppReview() : Promise.resolve(null),
-      ])
+      const [list, mine] = await Promise.all([getAppReviews(), getMyAppReview()])
       setReviews(list.results)
       setAverageRating(list.average_rating)
       setTotalReviews(list.total_reviews)
       setMyReview(mine)
     } catch {
-      toast.error('Failed to load reviews')
+      toast.error(t('appReviews.loadFailed'))
     } finally {
       setIsLoading(false)
     }
@@ -42,8 +38,7 @@ export default function AppReviews() {
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated])
+  }, [])
 
   const handleSuccess = () => {
     setShowForm(false)
@@ -58,7 +53,7 @@ export default function AppReviews() {
       toast.success(t('appReviews.deleted'))
       load()
     } catch {
-      toast.error('Failed to delete review')
+      toast.error(t('appReviews.deleteFailed'))
     }
   }
 
@@ -86,7 +81,7 @@ export default function AppReviews() {
           </div>
         </div>
 
-        {isAuthenticated && myReview && !showForm && (
+        {myReview && !showForm && (
           <div className="mb-6 flex justify-end">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" leftIcon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setShowForm(true)}>
@@ -99,19 +94,10 @@ export default function AppReviews() {
           </div>
         )}
 
-        {isAuthenticated && (!myReview || showForm) && (
+        {(!myReview || showForm) && (
           <div className="mb-8">
             <AppReviewForm existingReview={myReview} onSuccess={handleSuccess} />
           </div>
-        )}
-
-        {!isAuthenticated && (
-          <p className="mb-8 text-sm text-slate-500 dark:text-slate-400 text-center py-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-            <Link to="/login" className="text-primary-600 hover:underline font-medium">
-              {t('destination.signIn')}
-            </Link>{' '}
-            {t('appReviews.signInToReview')}
-          </p>
         )}
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 px-6">

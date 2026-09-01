@@ -79,15 +79,17 @@ import math
 from dataclasses import dataclass
 from typing import Callable
 
+from rest_framework import generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Avg, Count
 
-from core.similarity import cosine_similarity, overlap_coefficient
-from users.models import CustomUser
+from core.similarity import overlap_coefficient
 from destinations.models import Destination
 from destinations.serializers import DestinationSerializer
+from .models import RecommendationHistory
+from .serializers import RecommendationHistorySerializer
 
 # --- Realism controls -------------------------------------------------
 # Below this, a destination conflicts too much (or shares too little
@@ -114,23 +116,28 @@ class Criterion:
 
 
 def _type_active(prefs):
-    return bool(prefs.preferred_travel_type)
+    return bool(getattr(prefs, 'preferred_travel_type_id', None))
 
 
 def _type_score(prefs, destination):
-    user_vec = [1.0 if prefs.preferred_travel_type == t else 0.0 for t, _ in CustomUser.TRAVEL_TYPES]
-    dest_vec = [1.0 if destination.travel_type == t else 0.0 for t, _ in CustomUser.TRAVEL_TYPES]
-    return cosine_similarity(user_vec, dest_vec)
+    # travel_type/preferred_travel_type are now FKs into the admin-managed
+    # TravelCategory table rather than a fixed static-choice list. Comparing
+    # by id (the *_id shadow attribute Django provides for every FK, which
+    # reads the raw column with no extra query) is exactly equivalent to the
+    # old one-hot cosine_similarity comparison - for one-hot vectors with a
+    # single 1, cosine similarity is 1.0 iff the same category is set and
+    # 0.0 otherwise - but avoids fetching the category list at all, so this
+    # can run inside the per-destination scoring loop with zero extra
+    # queries instead of re-querying the lookup table on every call.
+    return 1.0 if prefs.preferred_travel_type_id == destination.travel_type_id else 0.0
 
 
 def _season_active(prefs):
-    return bool(prefs.preferred_season)
+    return bool(getattr(prefs, 'preferred_season_id', None))
 
 
 def _season_score(prefs, destination):
-    user_vec = [1.0 if prefs.preferred_season == s else 0.0 for s, _ in CustomUser.SEASON_CHOICES]
-    dest_vec = [1.0 if destination.best_season == s else 0.0 for s, _ in CustomUser.SEASON_CHOICES]
-    return cosine_similarity(user_vec, dest_vec)
+    return 1.0 if prefs.preferred_season_id == destination.best_season_id else 0.0
 
 
 def _activities_active(prefs):
@@ -253,9 +260,9 @@ def _dimension_breakdown(destination, user):
     # this keeps generate_explanation() and the frontend's ScoreBreakdown
     # shape completely unchanged from the original additive-scoring design.
     return {
-        'type_match': 40 if user.preferred_travel_type and destination.travel_type == user.preferred_travel_type else 0,
+        'type_match': 40 if user.preferred_travel_type_id and destination.travel_type_id == user.preferred_travel_type_id else 0,
         'budget_fit': 30 if user.budget and destination.estimated_cost <= user.budget else 0,
-        'season_match': 20 if user.preferred_season and destination.best_season == user.preferred_season else 0,
+        'season_match': 20 if user.preferred_season_id and destination.best_season_id == user.preferred_season_id else 0,
         'activity_overlap': min(
             len(set(user.preferred_activities or []) & set(destination.activities or [])) * 10, 30
         ),
@@ -266,14 +273,15 @@ def generate_explanation(destination, user, breakdown):
     reasons = []
 
     if breakdown['type_match'] > 0:
-        type_label = destination.travel_type.replace('_', ' ')
-        reasons.append(f"it matches your {type_label} travel style")
+        # destination.travel_type is select_related in _annotated_destinations(),
+        # so this reads the already-joined TravelCategory - no extra query.
+        reasons.append(f"it matches your {destination.travel_type.name.lower()} travel style")
 
     if breakdown['budget_fit'] > 0 and user.budget:
         reasons.append(f"fits your ${int(user.budget):,} budget at ${int(destination.estimated_cost):,}")
 
     if breakdown['season_match'] > 0 and destination.best_season:
-        reasons.append(f"is best visited in {destination.best_season} (your preferred season)")
+        reasons.append(f"is best visited in {destination.best_season.name.lower()} (your preferred season)")
 
     if breakdown['activity_overlap'] > 0 and user.preferred_activities and destination.activities:
         matching = sorted(set(user.preferred_activities) & set(destination.activities))
@@ -299,8 +307,12 @@ def generate_explanation(destination, user, breakdown):
 def _annotated_destinations():
     # Single query fetching all destinations with rating stats pre-computed,
     # avoiding the N+1 that DestinationSerializer's average_rating/
-    # review_count fields would otherwise incur per destination.
-    return Destination.objects.annotate(
+    # review_count fields would otherwise incur per destination. select_related
+    # joins travel_type/best_season in the same query - both the scoring
+    # explanation text and DestinationSerializer's SlugRelatedField output
+    # read these, so without this every scored/serialized destination would
+    # trigger its own extra query for each FK.
+    return Destination.objects.select_related('travel_type', 'best_season').annotate(
         avg_rating_annotated=Avg('reviews__rating'),
         review_count_annotated=Count('reviews', distinct=True),
     )
@@ -343,6 +355,16 @@ def _score_and_serialize(destinations, prefs, request):
     return results
 
 
+def _preferences_snapshot(user):
+    return {
+        'travel_type': user.preferred_travel_type.slug if user.preferred_travel_type_id else None,
+        'season': user.preferred_season.slug if user.preferred_season_id else None,
+        'activities': list(user.preferred_activities or []),
+        'budget': str(user.budget) if user.budget else None,
+        'trip_duration_preference': user.trip_duration_preference,
+    }
+
+
 class RecommendationView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -352,28 +374,29 @@ class RecommendationView(APIView):
         # saved preferences - no extra invalidation step is needed when a
         # user updates their profile.
         results = _score_and_serialize(_annotated_destinations(), request.user, request)
+        try:
+            RecommendationHistory.objects.create(
+                user=request.user,
+                preferences_snapshot=_preferences_snapshot(request.user),
+                results_snapshot=[
+                    {
+                        'destination_id': r['id'], 'name': r['name'], 'name_mk': r['name_mk'], 'slug': r['slug'],
+                        'score': r['score'], 'match_quality': r['match_quality'],
+                    }
+                    for r in results[:10]
+                ],
+                result_count=len(results),
+            )
+        except Exception:
+            # A history-log write failing must never break the actual
+            # recommendation response the user is waiting on.
+            pass
         return Response({'count': len(results), 'results': results})
 
 
-class AnonymousRecommendationView(APIView):
-    permission_classes = [AllowAny]
+class RecommendationHistoryListView(generics.ListAPIView):
+    serializer_class = RecommendationHistorySerializer
+    permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        travel_type = request.query_params.get('travel_type', '')
-        budget = request.query_params.get('budget', '')
-        season = request.query_params.get('season', '')
-        activities_raw = request.query_params.get('activities', '')
-        activities = [a.strip() for a in activities_raw.split(',') if a.strip()] if activities_raw else []
-
-        budget_float = float(budget) if budget else None
-
-        class GuestPrefs:
-            preferred_travel_type = travel_type
-            preferred_season = season
-            preferred_activities = activities
-            budget = budget_float
-            trip_duration_preference = None
-
-        prefs = GuestPrefs()
-        results = _score_and_serialize(_annotated_destinations(), prefs, request)
-        return Response({'count': len(results), 'results': results})
+    def get_queryset(self):
+        return RecommendationHistory.objects.filter(user=self.request.user)

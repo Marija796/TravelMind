@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from destinations.models import TravelCategory, Season
 from .models import CustomUser
 
 
@@ -10,6 +11,15 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['username', 'email', 'password', 'password2']
+
+    def validate_email(self, value):
+        # email isn't a unique DB column (a handful of pre-existing accounts
+        # already share one, predating email-based login) - guard against
+        # new registrations adding to that, since EmailOrUsernameBackend
+        # can only log in by email when it's unique.
+        if value and CustomUser.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -26,6 +36,16 @@ class UserSerializer(serializers.ModelSerializer):
     favorite_destination_ids = serializers.SerializerMethodField()
     wishlist_destination_ids = serializers.SerializerMethodField()
     visited_destination_ids = serializers.SerializerMethodField()
+    # Explicit SlugRelatedField (same reasoning as DestinationSerializer):
+    # preferred_travel_type/preferred_season are now FKs to the dynamic
+    # TravelCategory/Season tables, but the frontend expects the same
+    # "preferred_travel_type": "beach" string shape it always got.
+    preferred_travel_type = serializers.SlugRelatedField(
+        slug_field='slug', queryset=TravelCategory.objects.all(), required=False, allow_null=True,
+    )
+    preferred_season = serializers.SlugRelatedField(
+        slug_field='slug', queryset=Season.objects.all(), required=False, allow_null=True,
+    )
 
     class Meta:
         model = CustomUser
@@ -33,6 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id',
             'username',
             'email',
+            'role',
             'short_summary',
             'gender',
             'preferred_travel_type',
@@ -45,6 +66,11 @@ class UserSerializer(serializers.ModelSerializer):
             'wishlist_destination_ids',
             'visited_destination_ids',
         ]
+        # role must never be settable through the public profile endpoint -
+        # ProfileView.put/patch passes request.data straight into this
+        # serializer with partial=True, so without this a user could
+        # self-promote via PATCH /api/users/profile/ {"role": "admin"}.
+        read_only_fields = ['role']
 
     def get_favorite_destination_ids(self, obj):
         return list(obj.favorite_destinations.values_list('id', flat=True))

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Save, Trash2, User, Camera } from 'lucide-react'
+import { Save, Trash2, User, Camera, History } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Destination, TravelType, Season } from '@/types/destination'
 import type { Gender } from '@/types/user'
@@ -9,37 +10,16 @@ import { getFavorites, removeFavorite } from '@/services/favorites'
 import { getWishlist, removeFromWishlist } from '@/services/wishlist'
 import { getVisited, removeFromVisited } from '@/services/visited'
 import { useAuth } from '@/hooks/useAuth'
-import { ACTIVITY_OPTIONS, TRAVEL_TYPE_LABELS } from '@/types/destination'
+import { useTravelCategories, useSeasons } from '@/hooks/useTaxonomy'
+import { translateOrFallback } from '@/utils/translateOrFallback'
+import { activitySlug } from '@/utils/activitySlug'
+import { ACTIVITY_OPTIONS } from '@/types/destination'
 import DestinationCard from '@/components/destination/DestinationCard'
 import DestinationSkeleton from '@/components/destination/DestinationSkeleton'
 import PreferenceSelector from '@/components/common/PreferenceSelector'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import toast from 'react-hot-toast'
-
-const TravelTypeOptions: Array<{ value: TravelType; label: string }> = [
-  { value: 'beach', label: 'Beach' },
-  { value: 'mountain', label: 'Mountain' },
-  { value: 'city', label: 'City' },
-  { value: 'adventure', label: 'Adventure' },
-  { value: 'cultural', label: 'Cultural' },
-  { value: 'luxury', label: 'Luxury' },
-  { value: 'relaxation', label: 'Relaxation' },
-]
-
-const SeasonOptions: Array<{ value: Season; label: string }> = [
-  { value: 'spring', label: 'Spring' },
-  { value: 'summer', label: 'Summer' },
-  { value: 'autumn', label: 'Autumn' },
-  { value: 'winter', label: 'Winter' },
-]
-
-const GenderOptions: Array<{ value: Gender; label: string }> = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-]
 
 const extractErrorMessage = (err: unknown, fallback: string) => {
   const axiosErr = err as { response?: { data?: Record<string, string[] | string> } }
@@ -50,9 +30,22 @@ const extractErrorMessage = (err: unknown, fallback: string) => {
 
 type TabKey = 'saved' | 'wishlist' | 'visited'
 
+const GenderKeys: Gender[] = ['male', 'female', 'other', 'prefer_not_to_say']
+
 export default function Profile() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { user, refreshUser } = useAuth()
+  const { categories } = useTravelCategories()
+  const { seasons } = useSeasons()
+  const GenderOptions = GenderKeys.map((value) => ({ value, label: t(`gender.${value}`) }))
+  const TravelTypeOptions = categories.map((c) => ({
+    value: c.slug,
+    label: translateOrFallback(t, `travelType.${c.slug}`, i18n.language === 'mk' && c.name_mk ? c.name_mk : c.name),
+  }))
+  const SeasonOptions = seasons.map((s) => ({
+    value: s.slug,
+    label: translateOrFallback(t, `season.${s.slug}`, i18n.language === 'mk' && s.name_mk ? s.name_mk : s.name),
+  }))
   const [activeTab, setActiveTab] = useState<TabKey>('saved')
   const [favorites, setFavorites] = useState<Destination[]>([])
   const [wishlist, setWishlist] = useState<Destination[]>([])
@@ -101,7 +94,7 @@ export default function Profile() {
         await updateProfileImage(imageFile)
       } catch (err) {
         imageFailed = true
-        toast.error(extractErrorMessage(err, 'Failed to upload profile picture'))
+        toast.error(extractErrorMessage(err, t('profile.uploadImageFailed')))
       }
     }
 
@@ -118,7 +111,7 @@ export default function Profile() {
       })
     } catch (err) {
       fieldsFailed = true
-      toast.error(extractErrorMessage(err, 'Failed to save changes'))
+      toast.error(extractErrorMessage(err, t('profile.saveFailed')))
     }
 
     await refreshUser()
@@ -133,24 +126,24 @@ export default function Profile() {
     try {
       await removeFavorite(id)
       setFavorites((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Removed from favorites')
-    } catch { toast.error('Failed to remove') }
+      toast.success(t('profile.removedFromFavorites'))
+    } catch { toast.error(t('profile.removeFailed')) }
   }
 
   const removeWish = async (id: number) => {
     try {
       await removeFromWishlist(id)
       setWishlist((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Removed from wishlist')
-    } catch { toast.error('Failed to remove') }
+      toast.success(t('profile.removedFromWishlist'))
+    } catch { toast.error(t('profile.removeFailed')) }
   }
 
   const removeVisit = async (id: number) => {
     try {
       await removeFromVisited(id)
       setVisited((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Removed from visited')
-    } catch { toast.error('Failed to remove') }
+      toast.success(t('profile.removedFromVisited'))
+    } catch { toast.error(t('profile.removeFailed')) }
   }
 
   const initials = user?.username?.slice(0, 2).toUpperCase() || 'TM'
@@ -188,10 +181,21 @@ export default function Profile() {
             <p className="text-slate-500 dark:text-slate-400">{user?.email}</p>
             {user?.preferred_travel_type && (
               <p className="text-sm text-primary-600 font-medium mt-1">
-                {TRAVEL_TYPE_LABELS[user.preferred_travel_type]} {t('profile.traveller')}
+                {translateOrFallback(
+                  t,
+                  `travelType.${user.preferred_travel_type}`,
+                  categories.find((c) => c.slug === user.preferred_travel_type)?.name || user.preferred_travel_type,
+                )} {t('profile.traveller')}
               </p>
             )}
           </div>
+          <Link
+            to="/activity"
+            className="ml-auto hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            {t('nav.activity')}
+          </Link>
         </div>
 
         {/* Edit form */}
@@ -213,7 +217,7 @@ export default function Profile() {
           <Input
             label={t('profile.username')}
             {...register('username', { required: true })}
-            error={errors.username ? 'Username is required' : undefined}
+            error={errors.username ? t('profile.usernameRequired') : undefined}
           />
 
           <div>
@@ -229,8 +233,8 @@ export default function Profile() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label={t('profile.maxBudget')} type="number" placeholder="e.g. 5000" {...register('budget')} />
-            <Input label={t('profile.tripDuration')} type="number" placeholder="e.g. 14" {...register('trip_duration_preference')} />
+            <Input label={t('profile.maxBudget')} type="number" placeholder={t('profile.maxBudgetPlaceholder')} {...register('budget')} />
+            <Input label={t('profile.tripDuration')} type="number" placeholder={t('profile.tripDurationPlaceholder')} {...register('trip_duration_preference')} />
           </div>
 
           <PreferenceSelector
@@ -259,7 +263,7 @@ export default function Profile() {
 
           <PreferenceSelector
             label={t('profile.preferredActivities')}
-            options={ACTIVITY_OPTIONS.map((a) => ({ value: a, label: a }))}
+            options={ACTIVITY_OPTIONS.map((a) => ({ value: a, label: t(`activity.${activitySlug(a)}`, { defaultValue: a }) }))}
             selected={activities}
             onChange={setActivities}
           />
@@ -313,7 +317,7 @@ export default function Profile() {
                   <button
                     onClick={() => removeItem(dest.id)}
                     className="absolute top-3 left-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20"
-                    title="Remove"
+                    title={t('common.remove')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

@@ -18,9 +18,14 @@ interface Props {
   users: SimilarUser[]
   isLoading?: boolean
   skeletonCount?: number
+  renderSubtitle?: (user: SimilarUser) => string | undefined
+  emptyTitle?: string
+  emptyHint?: string
 }
 
-export default function SimilarUserGrid({ users, isLoading, skeletonCount = 6 }: Props) {
+export default function SimilarUserGrid({
+  users, isLoading, skeletonCount = 6, renderSubtitle, emptyTitle, emptyHint,
+}: Props) {
   const { t } = useTranslation()
 
   if (isLoading) {
@@ -37,8 +42,10 @@ export default function SimilarUserGrid({ users, isLoading, skeletonCount = 6 }:
     return (
       <div className="py-20 text-center">
         <p className="text-4xl mb-4">🧭</p>
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">{t('similarUsers.noOthers')}</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400">{t('similarUsers.noOthersHint')}</p>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">{emptyTitle || t('similarUsers.noOthers')}</h3>
+        {(emptyHint || !emptyTitle) && (
+          <p className="text-sm text-slate-500 dark:text-slate-400">{emptyHint || t('similarUsers.noOthersHint')}</p>
+        )}
       </div>
     )
   }
@@ -52,7 +59,7 @@ export default function SimilarUserGrid({ users, isLoading, skeletonCount = 6 }:
     >
       {users.map((u) => (
         <motion.div key={u.id} variants={itemVariants}>
-          <SimilarUserCard user={u} />
+          <SimilarUserCard user={u} subtitle={renderSubtitle?.(u)} />
         </motion.div>
       ))}
     </motion.div>

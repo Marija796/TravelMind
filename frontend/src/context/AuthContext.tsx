@@ -1,23 +1,30 @@
 import { createContext, useCallback, useEffect, useState } from 'react'
 import type { User, LoginPayload } from '@/types/user'
 import { getProfile, login as loginApi } from '@/services/users'
+import { adminLogin as adminLoginApi } from '@/services/adminAuth'
 
 interface AuthContextValue {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (payload: LoginPayload) => Promise<void>
-  loginWithTokens: (access: string, refresh: string) => Promise<void>
+  login: (payload: LoginPayload) => Promise<User>
+  adminLogin: (payload: LoginPayload) => Promise<User>
+  loginWithTokens: (access: string, refresh: string) => Promise<User>
   logout: () => void
   refreshUser: () => Promise<void>
+}
+
+const notImplemented = async (): Promise<User> => {
+  throw new Error('AuthContext used outside of AuthProvider')
 }
 
 export const AuthContext = createContext<AuthContextValue>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  login: async () => {},
-  loginWithTokens: async () => {},
+  login: notImplemented,
+  adminLogin: notImplemented,
+  loginWithTokens: notImplemented,
   logout: () => {},
   refreshUser: async () => {},
 })
@@ -56,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('refresh_token', refresh)
     const profile = await getProfile()
     setUser(profile)
+    return profile
   }
 
   const loginWithTokens = useCallback(async (access: string, refresh: string) => {
@@ -63,7 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('refresh_token', refresh)
     const profile = await getProfile()
     setUser(profile)
+    return profile
   }, [])
+
+  // Hits the separate admin-only endpoint (rejects a non-admin account
+  // server-side even with a correct password - see services/adminAuth.ts),
+  // then reuses the same token-storage/profile-fetch flow as every other
+  // login path once a token pair is actually issued.
+  const adminLogin = useCallback(async (payload: LoginPayload) => {
+    const { access, refresh } = await adminLoginApi(payload)
+    return loginWithTokens(access, refresh)
+  }, [loginWithTokens])
 
   const refreshUser = useCallback(async () => {
     const profile = await getProfile()
@@ -72,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated: !!user, isLoading, login, loginWithTokens, logout, refreshUser }}
+      value={{ user, isAuthenticated: !!user, isLoading, login, adminLogin, loginWithTokens, logout, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

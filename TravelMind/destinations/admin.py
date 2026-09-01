@@ -1,5 +1,17 @@
 from django.contrib import admin
-from .models import Destination
+from .models import Destination, TravelCategory, Season
+
+
+@admin.register(TravelCategory)
+class TravelCategoryAdmin(admin.ModelAdmin):
+    list_display = ['slug', 'name', 'name_mk', 'order']
+    search_fields = ['slug', 'name', 'name_mk']
+
+
+@admin.register(Season)
+class SeasonAdmin(admin.ModelAdmin):
+    list_display = ['slug', 'name', 'name_mk', 'order']
+    search_fields = ['slug', 'name', 'name_mk']
 
 
 @admin.register(Destination)

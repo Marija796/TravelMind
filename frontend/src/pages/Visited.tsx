@@ -26,9 +26,9 @@ export default function Visited() {
     try {
       await removeFromVisited(id)
       setItems((prev) => prev.filter((d) => d.id !== id))
-      toast.success('Removed from visited')
+      toast.success(t('destination.removedFromVisitedToast'))
     } catch {
-      toast.error('Failed to remove')
+      toast.error(t('profile.removeFailed'))
     }
   }
 
@@ -54,7 +54,7 @@ export default function Visited() {
         ) : (
           <>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-              {items.length} place{items.length !== 1 ? 's' : ''} visited
+              {t('visited.countVisited', { count: items.length })}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {items.map((dest) => (
@@ -63,7 +63,7 @@ export default function Visited() {
                   <button
                     onClick={() => remove(dest.id)}
                     className="absolute top-3 left-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20"
-                    title="Remove from visited"
+                    title={t('visited.removeTitle')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

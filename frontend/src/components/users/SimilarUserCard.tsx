@@ -3,9 +3,10 @@ import type { SimilarUser } from '@/types/user'
 
 interface Props {
   user: SimilarUser
+  subtitle?: string
 }
 
-export default function SimilarUserCard({ user }: Props) {
+export default function SimilarUserCard({ user, subtitle }: Props) {
   const { t } = useTranslation()
   const initials = user.username.slice(0, 2).toUpperCase()
 
@@ -32,6 +33,9 @@ export default function SimilarUserCard({ user }: Props) {
         </div>
         {user.short_summary && (
           <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">{user.short_summary}</p>
+        )}
+        {subtitle && (
+          <p className="text-xs font-medium text-primary-600 dark:text-primary-400">{subtitle}</p>
         )}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,22 +12,25 @@ import Input from '@/components/ui/Input'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
 import toast from 'react-hot-toast'
 
-const schema = z.object({
-  username: z.string().min(3, 'At least 3 characters').max(30, 'Max 30 characters'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'At least 8 characters'),
-  password2: z.string().min(1, 'Please confirm your password'),
-}).refine((d) => d.password === d.password2, {
-  message: 'Passwords do not match',
-  path: ['password2'],
-})
-
-type FormData = z.infer<typeof schema>
-
 export default function Register() {
   const { t } = useTranslation()
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  // zod schemas are usually module-scope, but validation messages need t(),
+  // which is only available inside the component - recompute only when the
+  // language changes, not on every render.
+  const schema = useMemo(() => z.object({
+    username: z.string().min(3, t('auth.usernameMinChars')).max(30, t('auth.usernameMaxChars')),
+    email: z.string().email(t('auth.invalidEmail')),
+    password: z.string().min(8, t('auth.passwordMinChars')),
+    password2: z.string().min(1, t('auth.confirmPasswordRequired')),
+  }).refine((d) => d.password === d.password2, {
+    message: t('auth.passwordsDontMatch'),
+    path: ['password2'],
+  }), [t])
+
+  type FormData = z.infer<typeof schema>
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -36,11 +40,11 @@ export default function Register() {
     try {
       await registerUser(data)
       await login({ username: data.username, password: data.password })
-      toast.success('Account created! Welcome to TravelMind 🎉')
+      toast.success(t('auth.accountCreatedToast'))
       navigate('/')
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: Record<string, string[]> } }
-      const msg = Object.values(axiosErr?.response?.data || {}).flat().join(' ') || 'Registration failed'
+      const msg = Object.values(axiosErr?.response?.data || {}).flat().join(' ') || t('auth.registrationFailed')
       toast.error(msg)
     }
   }
@@ -95,7 +99,7 @@ export default function Register() {
             <Input
               label={t('auth.email')}
               type="email"
-              placeholder="you@example.com"
+              placeholder={t('auth.emailPlaceholder')}
               leftIcon={<Mail className="w-4 h-4" />}
               error={errors.email?.message}
               {...register('email')}
