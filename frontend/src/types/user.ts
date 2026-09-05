@@ -8,6 +8,7 @@ export interface User {
   username: string
   email: string
   role: Role
+  is_verified: boolean
   short_summary: string
   gender: Gender | ''
   preferred_travel_type: TravelType | ''
@@ -88,3 +89,6 @@ export interface PasswordResetConfirmPayload {
   new_password: string
   new_password2: string
 }
+
+export interface VerifyEmailPayload { uid: string; token: string }
+export interface ResendVerificationPayload { email: string }

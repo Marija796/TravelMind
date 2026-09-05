@@ -16,6 +16,11 @@ class CustomUser(AbstractUser):
     ]
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')
+    # Only meaningful for role='user' - the regular login endpoint
+    # (VerifiedTokenObtainPairSerializer) rejects login when this is False.
+    # Administrator login (AdminTokenObtainPairSerializer) never checks this
+    # field, by design - see users/admin_serializers.py.
+    is_verified = models.BooleanField(default=False)
     short_summary = models.CharField(max_length=280, blank=True)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True)
     profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)

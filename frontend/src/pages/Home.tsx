@@ -61,14 +61,36 @@ export default function Home() {
       .finally(() => setLoading(false))
   }, [isAuthenticated])
 
+  // Any stated preference (not just travel type) can change which
+  // destinations qualify - see recommendations/views.py's CRITERIA, where
+  // season/budget/activities/duration are each independently scored. Gating
+  // and re-fetching on preferred_travel_type alone meant editing any other
+  // preference on the Profile page left this section showing stale picks
+  // computed from the old preferences.
+  const hasAnyPreference = !!(
+    user?.preferred_travel_type ||
+    user?.preferred_season ||
+    user?.budget ||
+    user?.trip_duration_preference ||
+    (user?.preferred_activities && user.preferred_activities.length > 0)
+  )
+
   useEffect(() => {
-    if (!isAuthenticated || !user?.preferred_travel_type) return
+    if (!isAuthenticated || !hasAnyPreference) { setRecommendations([]); return }
     setRecsLoading(true)
     getRecommendations()
       .then((d) => setRecommendations(d.results.slice(0, 3)))
       .catch(() => {})
       .finally(() => setRecsLoading(false))
-  }, [isAuthenticated, user?.preferred_travel_type])
+  }, [
+    isAuthenticated,
+    hasAnyPreference,
+    user?.preferred_travel_type,
+    user?.preferred_season,
+    user?.budget,
+    user?.trip_duration_preference,
+    JSON.stringify(user?.preferred_activities),
+  ])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

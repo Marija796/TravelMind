@@ -21,7 +21,7 @@ import toast from 'react-hot-toast'
 
 export default function Recommendations() {
   const { t, i18n } = useTranslation()
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const { favoriteIds, toggle } = useFavorites(user?.favorite_destination_ids)
   const { categories } = useTravelCategories()
   const { seasons } = useSeasons()
@@ -76,6 +76,12 @@ export default function Recommendations() {
         budget: budget ? String(budget) : null,
         trip_duration_preference: duration ? Number(duration) : null,
       })
+      // Without this, AuthContext's `user` (and anything derived from it,
+      // like Home's "Personalized for You" section or this page's own
+      // hasPrefs check) keeps the pre-save preferences until something else
+      // happens to refetch the profile - even though the save itself
+      // succeeded and fetchRecs() below already shows the up-to-date list.
+      await refreshUser()
       toast.success(t('recommendations.prefsSaved'))
       setShowPrefs(false)
       await fetchRecs()
@@ -177,7 +183,15 @@ export default function Recommendations() {
           </div>
         ) : results.length > 0 ? (
           <>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{t(results.length === 1 ? 'recommendations.matchedCount' : 'recommendations.matchedCountPlural', { count: results.length })}</p>
+            <p className={`text-sm text-slate-500 dark:text-slate-400 ${results.length < 3 ? 'mb-1' : 'mb-6'}`}>
+              {t(results.length === 1 ? 'recommendations.matchedCount' : 'recommendations.matchedCountPlural', { count: results.length })}
+            </p>
+            {/* Fewer than 3 destinations genuinely cleared the match
+                threshold - say so plainly instead of silently showing a
+                short, unexplained grid that looks like a mistake. */}
+            {results.length < 3 && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 mb-6">{t('recommendations.fewMatchesHint')}</p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {(showAll ? results : results.slice(0, 3)).map((dest, i) => (
                 <motion.div

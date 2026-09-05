@@ -24,6 +24,7 @@ const Login = lazy(() => import('@/pages/Login'))
 const Register = lazy(() => import('@/pages/Register'))
 const ForgotPassword = lazy(() => import('@/pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'))
+const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'))
 const AppReviews = lazy(() => import('@/pages/AppReviews'))
 const RecommendationHistory = lazy(() => import('@/pages/RecommendationHistory'))
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'))
@@ -99,6 +100,7 @@ function AnimatedRoutes() {
           <Route path="/register" element={<PageWrapper><Register /></PageWrapper>} />
           <Route path="/forgot-password" element={<PageWrapper><ForgotPassword /></PageWrapper>} />
           <Route path="/reset-password" element={<PageWrapper><ResetPassword /></PageWrapper>} />
+          <Route path="/verify-email" element={<PageWrapper><VerifyEmail /></PageWrapper>} />
           <Route
             path="/recommendations"
             element={

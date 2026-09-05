@@ -1,4 +1,5 @@
-from rest_framework import serializers
+from rest_framework import serializers, exceptions
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from destinations.models import TravelCategory, Season
 from .models import CustomUser
@@ -32,6 +33,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class VerifiedTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Backs the regular /api/users/login/ endpoint. Identical to stock
+    TokenObtainPairSerializer except: a role='user' account that hasn't
+    verified its email is rejected with a distinct 'email_not_verified'
+    code (unlike the admin endpoint's deliberately-generic error, this one
+    intentionally tells a correct-password user *why* - they already proved
+    they own the credentials, so there's no enumeration risk in telling
+    them the real reason, and it lets the frontend offer a resend action).
+
+    role='admin' accounts are never subject to this check - see
+    AdminTokenObtainPairSerializer/permissions.IsAdminRole for why
+    verification is a User-only requirement.
+    """
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if self.user.role == 'user' and not self.user.is_verified:
+            raise exceptions.AuthenticationFailed(
+                {
+                    'detail': 'Please verify your email address before logging in.',
+                    'code': 'email_not_verified',
+                },
+                'email_not_verified',
+            )
+        return data
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
 class UserSerializer(serializers.ModelSerializer):
     favorite_destination_ids = serializers.SerializerMethodField()
     wishlist_destination_ids = serializers.SerializerMethodField()
@@ -54,6 +92,7 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'email',
             'role',
+            'is_verified',
             'short_summary',
             'gender',
             'preferred_travel_type',
@@ -70,7 +109,7 @@ class UserSerializer(serializers.ModelSerializer):
         # ProfileView.put/patch passes request.data straight into this
         # serializer with partial=True, so without this a user could
         # self-promote via PATCH /api/users/profile/ {"role": "admin"}.
-        read_only_fields = ['role']
+        read_only_fields = ['role', 'is_verified']
 
     def get_favorite_destination_ids(self, obj):
         return list(obj.favorite_destinations.values_list('id', flat=True))

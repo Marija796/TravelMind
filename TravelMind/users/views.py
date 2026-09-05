@@ -5,6 +5,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -18,20 +19,39 @@ from google_auth_oauthlib.flow import Flow
 import urllib.request
 import json
 import os
+import ssl
+import certifi
 
 os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
 
 logger = logging.getLogger(__name__)
 
+# Used for every urllib HTTPS call below (Google userinfo lookup, profile
+# picture download) instead of ssl.create_default_context()'s bare default,
+# which trusts whatever root CAs happen to be installed in the OS
+# certificate store. On Windows that store commonly picks up a root
+# certificate (frequently injected by antivirus/security software that
+# intercepts HTTPS) with a malformed Basic Constraints extension, which
+# fails verification with "Basic Constraints of CA cert not marked
+# critical" - a real bug this fixes, not a theoretical one: Google sign-in
+# failed with a generic "Invalid or expired Google credential" error even
+# though the credential itself was fine, because the userinfo request never
+# even reached Google - it failed local TLS verification and was swallowed
+# by the broad except below. Pinning to certifi's maintained, known-good CA
+# bundle instead sidesteps whatever is (or isn't) trusted by the OS.
+_HTTPS_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
 from .models import CustomUser
 from .serializers import (
-    RegisterSerializer, UserSerializer,
+    RegisterSerializer, UserSerializer, VerifiedTokenObtainPairSerializer,
     GoogleAuthSerializer, PasswordResetSerializer, PasswordResetConfirmSerializer,
+    VerifyEmailSerializer, ResendVerificationSerializer,
 )
-from .utils import send_password_reset_email
-from .vectors import calculate_similarity
+from .utils import send_password_reset_email, send_verification_email, email_verification_token
+from .vectors import calculate_similarity, RATING_LIKE_THRESHOLD
 from destinations.models import Destination
 from destinations.serializers import DestinationSerializer
+from destinations.views import _annotated_destination_queryset
 
 
 def _safe_profile_image_url(request, user):
@@ -51,6 +71,79 @@ class RegisterView(generics.CreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        try:
+            send_verification_email(user)
+        except Exception:
+            # A failed/misconfigured email send must never turn a
+            # successful account creation into a 500 - the user can still
+            # request a fresh link via ResendVerificationEmailView once
+            # email delivery is fixed.
+            logger.exception('Failed to send verification email to user id=%s', user.pk)
+
+
+class VerifiedTokenObtainPairView(TokenObtainPairView):
+    """Backs /api/users/login/ - see VerifiedTokenObtainPairSerializer."""
+    serializer_class = VerifiedTokenObtainPairSerializer
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        uid = serializer.validated_data['uid']
+        token = serializer.validated_data['token']
+
+        try:
+            pk = force_str(urlsafe_base64_decode(uid))
+            user = CustomUser.objects.get(pk=pk)
+        except (CustomUser.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({'error': 'Invalid verification link.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.is_verified:
+            # Checked before check_token: the token hash includes
+            # is_verified, so a link clicked a second time after a
+            # successful first verification would otherwise fail the token
+            # check and show a confusing "invalid link" error instead of
+            # this friendly, correct explanation.
+            return Response({'message': 'Your email is already verified. You can log in.'}, status=status.HTTP_200_OK)
+
+        if not email_verification_token.check_token(user, token):
+            return Response({'error': 'Verification link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_verified = True
+        user.save(update_fields=['is_verified'])
+        return Response({'message': 'Email verified successfully. You can now log in.'}, status=status.HTTP_200_OK)
+
+
+class ResendVerificationEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        email = serializer.validated_data['email']
+        # Same generic response regardless of whether the email exists or
+        # is already verified - mirrors PasswordResetRequestView's
+        # enumeration protection below.
+        message = {'message': 'If this email is registered and not yet verified, a verification link has been sent.'}
+
+        user = CustomUser.objects.filter(email__iexact=email).first()
+        if user and not user.is_verified:
+            try:
+                send_verification_email(user)
+            except Exception:
+                logger.exception('Failed to resend verification email to user id=%s', user.pk)
+
+        return Response(message, status=status.HTTP_200_OK)
 
 
 class ProfileView(APIView):
@@ -95,10 +188,12 @@ def _compute_similar_users(request, me):
     admin tool can't drift from what a normal user actually sees.
     """
     my_favorites = set(me.favorite_destinations.values_list('id', flat=True))
+    my_wishlist = set(me.wishlist_destinations.values_list('id', flat=True))
+    my_rated = set(me.reviews.filter(rating__gte=RATING_LIKE_THRESHOLD).values_list('destination_id', flat=True))
     has_preferences = any([
         me.preferred_travel_type_id, me.preferred_season_id,
         me.preferred_activities, me.budget, me.trip_duration_preference,
-        my_favorites,
+        my_favorites, my_wishlist, my_rated,
     ])
     if not has_preferences:
         # Without this guard every criterion in calculate_similarity is
@@ -114,17 +209,21 @@ def _compute_similar_users(request, me):
     # admin account out of the candidate pool.
     others = CustomUser.objects.exclude(pk=me.pk).exclude(role='admin').filter(
         is_staff=False, is_superuser=False, is_active=True,
-    ).prefetch_related('favorite_destinations')
+    ).prefetch_related('favorite_destinations', 'wishlist_destinations', 'reviews')
 
     scored = []
     for other in others:
         # .values_list() always issues a fresh query and ignores the
-        # prefetch_related('favorite_destinations') cache above - only
-        # .all() (or iterating the manager directly, as here) reads from
-        # it. Using values_list() here would silently turn this back into
-        # one query per candidate user.
+        # prefetch_related() cache above - only .all() (or iterating the
+        # manager directly, as here) reads from it. Using values_list() here
+        # would silently turn this back into one query per candidate user.
         other_favorites = {d.id for d in other.favorite_destinations.all()}
-        similarity = calculate_similarity(me, other, favorites_a=my_favorites, favorites_b=other_favorites)
+        other_wishlist = {d.id for d in other.wishlist_destinations.all()}
+        other_rated = {r.destination_id for r in other.reviews.all() if r.rating >= RATING_LIKE_THRESHOLD}
+        similarity = calculate_similarity(
+            me, other, favorites_a=my_favorites, favorites_b=other_favorites,
+            wishlist_a=my_wishlist, wishlist_b=other_wishlist, rated_a=my_rated, rated_b=other_rated,
+        )
         scored.append((similarity, other))
     scored.sort(key=lambda item: item[0], reverse=True)
     scored = scored[:SIMILAR_USERS_LIMIT]
@@ -165,6 +264,8 @@ class DestinationInterestedUsersView(APIView):
         destination = get_object_or_404(Destination, pk=destination_id)
         me = request.user
         my_favorites = set(me.favorite_destinations.values_list('id', flat=True))
+        my_wishlist = set(me.wishlist_destinations.values_list('id', flat=True))
+        my_rated = set(me.reviews.filter(rating__gte=RATING_LIKE_THRESHOLD).values_list('destination_id', flat=True))
 
         base_qs = CustomUser.objects.exclude(pk=me.pk).exclude(role='admin').filter(
             is_active=True, is_staff=False, is_superuser=False,
@@ -172,7 +273,7 @@ class DestinationInterestedUsersView(APIView):
 
         direct_qs = base_qs.filter(
             Q(favorite_destinations=destination) | Q(wishlist_destinations=destination)
-        ).distinct().prefetch_related('favorite_destinations')
+        ).distinct().prefetch_related('favorite_destinations', 'wishlist_destinations', 'reviews')
         candidates = list(direct_qs)
         interest_kind = {u.id: 'direct' for u in candidates}
 
@@ -186,7 +287,7 @@ class DestinationInterestedUsersView(APIView):
                 extra_qs = base_qs.exclude(pk__in=interest_kind.keys()).filter(
                     Q(favorite_destinations__id__in=similar_destination_ids)
                     | Q(wishlist_destinations__id__in=similar_destination_ids)
-                ).distinct().prefetch_related('favorite_destinations')
+                ).distinct().prefetch_related('favorite_destinations', 'wishlist_destinations', 'reviews')
                 for other in extra_qs:
                     if other.id not in interest_kind:
                         candidates.append(other)
@@ -197,7 +298,12 @@ class DestinationInterestedUsersView(APIView):
             # .all() (not .values_list()) so this reads the prefetch_related
             # cache above instead of issuing a fresh query per candidate.
             other_favorites = {d.id for d in other.favorite_destinations.all()}
-            similarity = calculate_similarity(me, other, favorites_a=my_favorites, favorites_b=other_favorites)
+            other_wishlist = {d.id for d in other.wishlist_destinations.all()}
+            other_rated = {r.destination_id for r in other.reviews.all() if r.rating >= RATING_LIKE_THRESHOLD}
+            similarity = calculate_similarity(
+                me, other, favorites_a=my_favorites, favorites_b=other_favorites,
+                wishlist_a=my_wishlist, wishlist_b=other_wishlist, rated_a=my_rated, rated_b=other_rated,
+            )
             scored.append((similarity, other))
         scored.sort(key=lambda item: item[0], reverse=True)
         scored = scored[:DESTINATION_INTERESTED_USERS_LIMIT]
@@ -215,12 +321,28 @@ class DestinationInterestedUsersView(APIView):
         return Response({'count': len(results), 'results': results})
 
 
+def _engagement_serializer_context(request):
+    # Same select_related/annotation + id-set-context pattern as
+    # destinations/views.py's DestinationListView, so listing a user's own
+    # favorites/wishlist/visited doesn't fall back to DestinationSerializer's
+    # per-object queries (travel_type/best_season joins, rating aggregation,
+    # is_favorited/is_wishlisted/is_visited existence checks) for every
+    # returned destination.
+    user = request.user
+    return {
+        'request': request,
+        'favorited_ids': set(user.favorite_destinations.values_list('id', flat=True)),
+        'wishlisted_ids': set(user.wishlist_destinations.values_list('id', flat=True)),
+        'visited_ids': set(user.visited_destinations.values_list('id', flat=True)),
+    }
+
+
 class FavoriteListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        favorites = request.user.favorite_destinations.all()
-        serializer = DestinationSerializer(favorites, many=True, context={'request': request})
+        favorites = _annotated_destination_queryset().filter(favorited_by=request.user)
+        serializer = DestinationSerializer(favorites, many=True, context=_engagement_serializer_context(request))
         return Response(serializer.data)
 
 
@@ -242,8 +364,8 @@ class WishlistListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        wishlist = request.user.wishlist_destinations.all()
-        serializer = DestinationSerializer(wishlist, many=True, context={'request': request})
+        wishlist = _annotated_destination_queryset().filter(wishlisted_by=request.user)
+        serializer = DestinationSerializer(wishlist, many=True, context=_engagement_serializer_context(request))
         return Response(serializer.data)
 
 
@@ -265,8 +387,8 @@ class VisitedListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        visited = request.user.visited_destinations.all()
-        serializer = DestinationSerializer(visited, many=True, context={'request': request})
+        visited = _annotated_destination_queryset().filter(visited_by=request.user)
+        serializer = DestinationSerializer(visited, many=True, context=_engagement_serializer_context(request))
         return Response(serializer.data)
 
 
@@ -361,12 +483,18 @@ class GoogleAuthView(APIView):
                         'https://www.googleapis.com/oauth2/v3/userinfo',
                         headers={'Authorization': f'Bearer {credential}'}
                     )
-                    with urllib.request.urlopen(req, timeout=10) as resp:
+                    with urllib.request.urlopen(req, timeout=10, context=_HTTPS_CONTEXT) as resp:
                         userinfo = json.loads(resp.read().decode())
                         email = userinfo.get('email')
                         name = userinfo.get('name', '')
                         picture = userinfo.get('picture', '')
                 except Exception:
+                    # Logged at full detail server-side (this catches
+                    # everything from a genuinely invalid/expired token to a
+                    # local TLS/network failure that never reached Google at
+                    # all - see _HTTPS_CONTEXT) - the client only ever sees
+                    # the generic message below, same reasoning as the code-
+                    # exchange except block above.
                     logger.exception('Failed to verify Google credential')
                     return Response(
                         {'error': 'Invalid or expired Google credential. Please try again.'},
@@ -397,6 +525,11 @@ class GoogleAuthView(APIView):
                     email=email,
                     first_name=name.split(' ')[0] if name else '',
                     last_name=' '.join(name.split(' ')[1:]) if name and len(name.split(' ')) > 1 else '',
+                    # Google has already proven this account owns the
+                    # email address (that's what the OAuth token exchange
+                    # above verified) - a separate email-verification loop
+                    # would be redundant.
+                    is_verified=True,
                 )
                 user.set_unusable_password()
                 user.save()
@@ -407,13 +540,29 @@ class GoogleAuthView(APIView):
                         req = urllib.request.Request(
                             picture, headers={'User-Agent': 'Mozilla/5.0'}
                         )
-                        with urllib.request.urlopen(req, timeout=5) as resp:
+                        with urllib.request.urlopen(req, timeout=5, context=_HTTPS_CONTEXT) as resp:
                             content = resp.read()
                         user.profile_image.save(
                             f'google_{user.pk}.jpg', ContentFile(content), save=True
                         )
                     except Exception:
                         pass
+            elif not user.is_verified:
+                # An existing account (e.g. registered the normal
+                # email/password way but never clicked the verification
+                # link) that now signs in with Google has, by that very
+                # act, proven ownership of the email address just as
+                # surely as a brand-new Google signup does above - the
+                # same reasoning, applied after the fact instead of at
+                # creation. Without this, Google sign-in itself still
+                # succeeds (this view never checked is_verified), but the
+                # account stays marked unverified, so a *later* plain
+                # username/password login attempt is wrongly rejected by
+                # VerifiedTokenObtainPairSerializer with "email not
+                # verified" - confusing after they just successfully
+                # signed in.
+                user.is_verified = True
+                user.save(update_fields=['is_verified'])
 
             refresh = RefreshToken.for_user(user)
             return Response({

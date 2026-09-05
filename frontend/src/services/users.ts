@@ -2,6 +2,7 @@ import api from './api'
 import type {
   User, LoginPayload, LoginResponse, RegisterPayload, UpdateProfilePayload,
   GoogleAuthPayload, GoogleAuthResponse, PasswordResetPayload, PasswordResetResponse, PasswordResetConfirmPayload,
+  VerifyEmailPayload, ResendVerificationPayload,
 } from '@/types/user'
 
 export const register = (data: RegisterPayload) =>
@@ -36,3 +37,9 @@ export const requestPasswordReset = (data: PasswordResetPayload) =>
 
 export const confirmPasswordReset = (data: PasswordResetConfirmPayload) =>
   api.post<{ message: string }>('/users/password-reset-confirm/', data).then((r) => r.data)
+
+export const verifyEmail = (data: VerifyEmailPayload) =>
+  api.post<{ message: string }>('/users/verify-email/', data).then((r) => r.data)
+
+export const resendVerificationEmail = (data: ResendVerificationPayload) =>
+  api.post<{ message: string }>('/users/resend-verification/', data).then((r) => r.data)

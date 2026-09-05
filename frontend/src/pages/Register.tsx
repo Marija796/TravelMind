@@ -1,12 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Link, useNavigate } from 'react-router-dom'
-import { UserPlus, Mail, Lock, User, Compass } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { UserPlus, Mail, Lock, User, Compass, CheckCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { register as registerUser } from '@/services/users'
-import { useAuth } from '@/hooks/useAuth'
+import { register as registerUser, resendVerificationEmail } from '@/services/users'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
@@ -14,8 +13,7 @@ import toast from 'react-hot-toast'
 
 export default function Register() {
   const { t } = useTranslation()
-  const { login } = useAuth()
-  const navigate = useNavigate()
+  const [registeredEmail, setRegisteredEmail] = useState('')
 
   // zod schemas are usually module-scope, but validation messages need t(),
   // which is only available inside the component - recompute only when the
@@ -39,14 +37,52 @@ export default function Register() {
   const onSubmit = async (data: FormData) => {
     try {
       await registerUser(data)
-      await login({ username: data.username, password: data.password })
-      toast.success(t('auth.accountCreatedToast'))
-      navigate('/')
+      // Registration no longer auto-logs the user in - a brand new account
+      // is unverified, so an immediate login attempt would just fail with
+      // "email not verified". Show the check-your-inbox state directly
+      // instead of surfacing that as an error right after a successful signup.
+      setRegisteredEmail(data.email)
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: Record<string, string[]> } }
       const msg = Object.values(axiosErr?.response?.data || {}).flat().join(' ') || t('auth.registrationFailed')
       toast.error(msg)
     }
+  }
+
+  const handleResend = async () => {
+    try {
+      await resendVerificationEmail({ email: registeredEmail })
+      toast.success(t('auth.resendVerificationSent'))
+    } catch {
+      toast.error(t('auth.somethingWentWrong'))
+    }
+  }
+
+  if (registeredEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="w-full max-w-md text-center">
+          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">{t('auth.checkYourInbox')}</h1>
+          <p className="text-slate-500 dark:text-slate-400 mb-2">
+            {t('auth.registerCheckInboxBody', { email: registeredEmail })}
+          </p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mb-8">
+            {t('auth.registerCheckInboxHint')}
+          </p>
+          <div className="flex flex-col gap-3">
+            <Button onClick={handleResend} variant="secondary" fullWidth>
+              {t('auth.resendVerificationEmail')}
+            </Button>
+            <Link to="/login">
+              <Button fullWidth>{t('auth.backToLogin')}</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

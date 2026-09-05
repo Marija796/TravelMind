@@ -1,4 +1,5 @@
 import { Search, X, SlidersHorizontal } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface SearchBarProps {
   value: string
@@ -9,7 +10,8 @@ interface SearchBarProps {
   isFilterOpen?: boolean
 }
 
-export default function SearchBar({ value, onChange, placeholder = 'Search destinations...', showFilterButton, onFilterToggle, isFilterOpen }: SearchBarProps) {
+export default function SearchBar({ value, onChange, placeholder, showFilterButton, onFilterToggle, isFilterOpen }: SearchBarProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex gap-2">
       <div className="relative flex-1">
@@ -18,7 +20,7 @@ export default function SearchBar({ value, onChange, placeholder = 'Search desti
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('filter.searchPlaceholder')}
           className="input-base pl-10 pr-10 h-11"
         />
         {value && (
@@ -40,7 +42,7 @@ export default function SearchBar({ value, onChange, placeholder = 'Search desti
           }`}
         >
           <SlidersHorizontal className="w-4 h-4" />
-          <span className="hidden sm:inline">Filters</span>
+          <span className="hidden sm:inline">{t('filter.filterButton')}</span>
         </button>
       )}
     </div>

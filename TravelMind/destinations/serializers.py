@@ -58,10 +58,16 @@ class DestinationSerializer(serializers.ModelSerializer):
 
     def get_average_rating(self, obj):
         # Fast path: callers that already annotated the queryset (e.g. the
-        # recommendations views) avoid a per-object query here.
-        annotated = getattr(obj, 'avg_rating_annotated', None)
-        if annotated is not None:
-            return round(annotated, 1)
+        # recommendations views) avoid a per-object query here. Checked via
+        # hasattr, not "value is not None" - Avg() of a destination with
+        # zero reviews annotates to None (SQL AVG of an empty group is
+        # NULL), which is a legitimate annotated result, not "unannotated".
+        # Comparing the *value* to None here would silently fall through to
+        # the slow per-object query path for every zero-review destination,
+        # defeating the annotation's entire purpose.
+        if hasattr(obj, 'avg_rating_annotated'):
+            annotated = obj.avg_rating_annotated
+            return round(annotated, 1) if annotated is not None else None
         reviews = obj.reviews.all()
         if reviews.exists():
             return round(sum(r.rating for r in reviews) / reviews.count(), 1)

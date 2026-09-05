@@ -49,7 +49,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = [
-            'id', 'username', 'email', 'role', 'is_active',
+            'id', 'username', 'email', 'role', 'is_active', 'is_verified',
             'short_summary', 'gender', 'preferred_travel_type', 'preferred_season',
             'preferred_activities', 'trip_duration_preference', 'budget',
             'date_joined', 'last_login',
@@ -80,7 +80,11 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = CustomUser(**validated_data)
+        # Admin-created accounts are real, admin-vouched-for accounts, not
+        # self-service signups - they skip the email verification hoop the
+        # same way Google OAuth accounts do (see GoogleAuthView), since
+        # there's no "prove you own this inbox" step to complete here.
+        user = CustomUser(**validated_data, is_verified=True)
         user.set_password(password)
         user.save()
         return user

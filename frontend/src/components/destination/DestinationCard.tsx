@@ -159,7 +159,7 @@ export default function DestinationCard({
               <Star className={`w-3.5 h-3.5 ${destination.average_rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300 dark:text-slate-600'}`} />
               {destination.average_rating
                 ? `${destination.average_rating} (${reviewCount})`
-                : `${reviewCount} reviews`}
+                : t('destination.reviewsCount', { count: reviewCount })}
             </span>
           </div>
         </div>

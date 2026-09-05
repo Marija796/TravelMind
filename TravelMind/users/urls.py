@@ -1,5 +1,5 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, ProfileView, DestinationInterestedUsersView,
     FavoriteListView, FavoriteToggleView,
@@ -7,6 +7,7 @@ from .views import (
     VisitedListView, VisitedToggleView,
     GoogleAuthView,
     PasswordResetRequestView, PasswordResetConfirmView,
+    VerifiedTokenObtainPairView, VerifyEmailView, ResendVerificationEmailView,
 )
 from .admin_views import (
     AdminUserListView, AdminUserCreateView, AdminUserDetailView, AdminSimilarUsersView,
@@ -15,9 +16,11 @@ from .admin_views import (
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
-    path('login/', TokenObtainPairView.as_view(), name='login'),
+    path('login/', VerifiedTokenObtainPairView.as_view(), name='login'),
     path('admin/login/', AdminTokenObtainPairView.as_view(), name='admin-login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('verify-email/', VerifyEmailView.as_view(), name='verify-email'),
+    path('resend-verification/', ResendVerificationEmailView.as_view(), name='resend-verification'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path(
         'destinations/<int:destination_id>/interested/',

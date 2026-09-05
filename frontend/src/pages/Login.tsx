@@ -6,6 +6,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { LogIn, Mail, Lock, Compass, User as UserIcon, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
+import { resendVerificationEmail } from '@/services/users'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import GoogleLoginButton from '@/components/auth/GoogleLoginButton'
@@ -43,6 +44,7 @@ export default function Login() {
   // page here with adminIntent - it just pre-selects the Administrator
   // card as a convenience, the selection stays fully visible and switchable.
   const [mode, setMode] = useState<LoginMode>(state?.adminIntent ? 'admin' : 'user')
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null)
 
   const schema = useMemo(() => z.object({
     username: z.string().min(1, t('auth.usernameRequired')),
@@ -61,6 +63,7 @@ export default function Login() {
   }
 
   const onSubmit = async (data: FormData) => {
+    setUnverifiedEmail(null)
     if (mode === 'admin') {
       try {
         await adminLogin(data)
@@ -76,8 +79,27 @@ export default function Login() {
       toast.success(t('auth.welcomeBackToast'))
       const destination = from || (profile.role === 'admin' ? '/admin' : '/')
       navigate(destination, { replace: true })
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { code?: string } } }
+      if (axiosErr?.response?.data?.code === 'email_not_verified') {
+        toast.error(t('auth.emailNotVerifiedToast'))
+        // data.username may be an email (the field accepts either) - the
+        // resend endpoint no-ops harmlessly if it isn't, so this is safe
+        // to offer regardless of which one the user actually typed.
+        setUnverifiedEmail(data.username)
+      } else {
+        toast.error(t('auth.invalidCredentials'))
+      }
+    }
+  }
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return
+    try {
+      await resendVerificationEmail({ email: unverifiedEmail })
+      toast.success(t('auth.resendVerificationSent'))
     } catch {
-      toast.error(t('auth.invalidCredentials'))
+      toast.error(t('auth.somethingWentWrong'))
     }
   }
 
@@ -194,6 +216,16 @@ export default function Login() {
               {mode === 'admin' ? t('adminAuth.loginButton') : t('auth.signIn')}
             </Button>
           </form>
+
+          {mode === 'user' && unverifiedEmail && (
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              className="mt-3 text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"
+            >
+              {t('auth.resendVerificationEmail')}
+            </button>
+          )}
 
           {mode === 'user' ? (
             <>
