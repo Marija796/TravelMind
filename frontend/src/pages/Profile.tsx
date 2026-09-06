@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Save, Trash2, User, Camera, History } from 'lucide-react'
+import { Save, User, Camera, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { Destination, TravelType, Season } from '@/types/destination'
@@ -307,21 +307,15 @@ export default function Profile() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {items.map((dest) => (
-                <div key={dest.id} className="relative group">
-                  <DestinationCard
-                    destination={dest}
-                    isFavorite={activeTab === 'saved'}
-                    isWishlisted={activeTab === 'wishlist'}
-                    isVisited={activeTab === 'visited'}
-                  />
-                  <button
-                    onClick={() => removeItem(dest.id)}
-                    className="absolute top-3 left-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20"
-                    title={t('common.remove')}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <DestinationCard
+                  key={dest.id}
+                  destination={dest}
+                  isFavorite={activeTab === 'saved'}
+                  isWishlisted={activeTab === 'wishlist'}
+                  isVisited={activeTab === 'visited'}
+                  onRemove={removeItem}
+                  removeTitle={t('common.remove')}
+                />
               ))}
             </div>
           )}

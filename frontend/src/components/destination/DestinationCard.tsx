@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Heart, MapPin, DollarSign, Star, Clock, Bookmark, CheckCircle2, ChevronDown } from 'lucide-react'
+import { Heart, MapPin, DollarSign, Star, Clock, Bookmark, CheckCircle2, ChevronDown, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Destination } from '@/types/destination'
 import type { Review } from '@/types/review'
@@ -26,6 +26,14 @@ interface Props {
   onVisitedToggle?: (id: number) => void
   showScore?: boolean
   score?: number
+  // Renders a remove button in the card's own action stack (top-right).
+  // The Wishlist/Visited/Profile pages each used to overlay their own
+  // absolutely-positioned delete button at top-3 left-3 on a wrapper
+  // around this card - which sat directly on top of the travel-type/match
+  // badges. Owning the button here puts it in the stack that already
+  // handles laying out multiple actions without collisions.
+  onRemove?: (id: number) => void
+  removeTitle?: string
 }
 
 export default function DestinationCard({
@@ -38,6 +46,8 @@ export default function DestinationCard({
   onVisitedToggle,
   showScore,
   score,
+  onRemove,
+  removeTitle,
 }: Props) {
   const { t, i18n } = useTranslation()
   const { isAuthenticated } = useAuth()
@@ -94,14 +104,25 @@ export default function DestinationCard({
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-        {showScore && score !== undefined && (
-          <div className="absolute top-3 left-3 bg-primary-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow z-10">
-            {t('common.matchBadge', { value: Math.round(score * 100) })}
-          </div>
-        )}
+        {/* Both badges live in one wrapping flex row rather than being
+            absolutely positioned with a hardcoded left offset. The old
+            `left-28` assumed the match badge was always ~7rem wide, which
+            only held for short English text - "97% совпаѓање" (mk) is far
+            wider, so the travel-type badge was drawn on top of it. Laying
+            them out in flow means each badge takes its natural width and
+            the second wraps to the next line when there isn't room, at any
+            label length or language. right-14 keeps them clear of the
+            favorite/wishlist buttons in the top-right corner. */}
+        <div className="absolute top-3 left-3 right-14 flex flex-wrap items-start gap-1.5 z-10">
+          {showScore && score !== undefined && (
+            <div className="bg-primary-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow whitespace-nowrap">
+              {t('common.matchBadge', { value: Math.round(score * 100) })}
+            </div>
+          )}
 
-        <div className={`absolute top-3 ${showScore && score !== undefined ? 'left-28' : 'left-3'} text-xs font-medium px-2.5 py-1 rounded-full z-10 ${TRAVEL_TYPE_COLORS[destination.travel_type as keyof typeof TRAVEL_TYPE_COLORS] || DEFAULT_TRAVEL_TYPE_COLOR}`}>
-          {travelTypeLabel}
+          <div className={`text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap ${TRAVEL_TYPE_COLORS[destination.travel_type as keyof typeof TRAVEL_TYPE_COLORS] || DEFAULT_TRAVEL_TYPE_COLOR}`}>
+            {travelTypeLabel}
+          </div>
         </div>
 
         {isVisited && (
@@ -129,6 +150,16 @@ export default function DestinationCard({
             title={isWishlisted ? t('destination.removeFromWishlist') : t('destination.addToWishlist')}
           >
             <Bookmark className={`w-4 h-4 transition-all duration-200 ${isWishlisted ? 'fill-violet-500 text-violet-500' : 'text-slate-400 hover:text-violet-400'}`} />
+          </button>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(destination.id)}
+            className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 hover:scale-110 transition-all"
+            title={removeTitle}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
       </div>

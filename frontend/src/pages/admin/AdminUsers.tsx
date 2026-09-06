@@ -81,7 +81,11 @@ export default function AdminUsers() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-1.5">
+          {/* flex-wrap for the same reason as FilterPanel's chip groups:
+              these labels are much longer in Macedonian ("Администратор"),
+              and without it they overflow rather than wrap on narrow
+              viewports. */}
+          <div className="flex flex-wrap gap-1.5">
             {(['', 'user', 'admin'] as const).map((r) => (
               <button
                 key={r || 'all'}

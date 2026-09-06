@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import StarRating from '@/components/common/StarRating'
+import { formatDate } from '@/utils/formatDate'
 
 export interface ReviewLike {
   username: string
@@ -15,10 +16,9 @@ interface Props {
 }
 
 export default function ReviewCard({ review, highlight }: Props) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const initials = review.username.slice(0, 2).toUpperCase()
-  const locale = i18n.language === 'mk' ? 'mk-MK' : 'en-US'
-  const date = new Date(review.created_at).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
+  const date = formatDate(review.created_at)
 
   return (
     <div

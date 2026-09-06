@@ -92,7 +92,11 @@ export default function FilterPanel({ filters, onChange, onClear }: Props) {
       {/* Difficulty */}
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">{t('filter.difficulty')}</p>
-        <div className="flex gap-1.5">
+        {/* flex-wrap (matching every other chip group above) - without it
+            these three chips are forced onto one line and overflow the
+            panel whenever the labels are long, e.g. Macedonian
+            "Предизвикувачки" for 'challenging'. */}
+        <div className="flex flex-wrap gap-1.5">
           {Difficulties.map((d) => (
             <button
               key={d}

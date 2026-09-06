@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Destination } from '@/types/destination'
 import { getWishlist, removeFromWishlist } from '@/services/wishlist'
@@ -58,16 +57,13 @@ export default function Wishlist() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {items.map((dest) => (
-                <div key={dest.id} className="relative group">
-                  <DestinationCard destination={dest} isWishlisted />
-                  <button
-                    onClick={() => remove(dest.id)}
-                    className="absolute top-3 left-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20"
-                    title={t('destination.removeFromWishlist')}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <DestinationCard
+                  key={dest.id}
+                  destination={dest}
+                  isWishlisted
+                  onRemove={remove}
+                  removeTitle={t('destination.removeFromWishlist')}
+                />
               ))}
             </div>
           </>

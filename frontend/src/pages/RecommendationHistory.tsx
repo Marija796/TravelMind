@@ -7,6 +7,7 @@ import type { RecommendationHistoryEntry } from '@/types/recommendationHistory'
 import { useTravelCategories, useSeasons } from '@/hooks/useTaxonomy'
 import { translateOrFallback } from '@/utils/translateOrFallback'
 import { localizedName } from '@/utils/localizedDestination'
+import { formatDateTime } from '@/utils/formatDate'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
@@ -73,7 +74,7 @@ export default function RecommendationHistory() {
                   <Card key={entry.id} padding="md">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <p className="text-sm text-slate-500 dark:text-slate-400">
-                        {t('history.searchedOn', { date: new Date(entry.created_at).toLocaleString(i18n.language) })}
+                        {t('history.searchedOn', { date: formatDateTime(entry.created_at) })}
                       </p>
                       <span className="text-xs text-slate-400 dark:text-slate-500">
                         {t('history.viewedResults', { count: entry.result_count })}
